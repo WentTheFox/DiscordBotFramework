@@ -111,13 +111,25 @@ const pingCommand = fixedReplyCommandFactory('ping', 'Replies with pong', 'pong'
 
 ### `@wentthefox-org/discord-bot-framework/client`
 
+Sharding is entirely opt-in. Most bots — anything single-guild or otherwise
+small enough not to need multiple discord.js shards — should just use
+`createBotClient` and never touch `createShardManager` or anything
+shard-related at all:
+
 ```ts
-import { createBotClient, createShardManager } from '@wentthefox-org/discord-bot-framework/client';
+import { createBotClient } from '@wentthefox-org/discord-bot-framework/client';
 
-// Single-guild / unsharded bots:
 const client = await createBotClient({ intents: [GatewayIntentBits.Guilds], token, onInteraction });
+```
 
-// Sharded bots:
+Only reach for `createShardManager` if your bot actually runs across
+multiple discord.js shards (large multi-guild bots). It's a separate,
+independent function — pulling it in doesn't require any sharding-specific
+config elsewhere in the framework:
+
+```ts
+import { createShardManager } from '@wentthefox-org/discord-bot-framework/client';
+
 const manager = await createShardManager({
   token, botScriptPath, logger,
   beforeSpawn: () => startupCommandsUpdate(logger),

@@ -56,6 +56,16 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   event-forwarding plus one `beforeSpawn` hook. Resist adding bot-specific
   orchestration logic to it (e.g. HammerTimeBot's specific
   `startupCommandsUpdate` steps stay bot-side, passed in as the hook).
+- **Sharding is fully optional, by design, not an oversight.** `createBotClient`
+  (unsharded) and `createShardManager` (sharded) are two independent functions
+  in `src/client/` — neither depends on the other, and `createBotClient` has
+  zero sharding-related config surface. A single-guild bot like PennyCurve
+  should call `createBotClient` only and never import or reference
+  `createShardManager` at all. Don't unify them behind a single
+  `createBot({ sharding? })`-style entry point unless asked — the two setups
+  (single `Client` login vs. spawning a separate `bot.js` process per shard
+  via `ShardingManager`) are structurally different enough that a shared
+  entry point would just be an `if` branch hiding two unrelated code paths.
 - **The interaction router is split into two layers on purpose:**
   `dispatch*` functions (`dispatchChatInputCommand`, `dispatchAutocomplete`,
   `dispatchComponent`, `dispatchModal`, `dispatchContextMenu` in
