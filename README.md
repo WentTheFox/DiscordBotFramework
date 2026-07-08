@@ -1,5 +1,7 @@
 # @wentthefox-org/discord-bot-framework
 
+[![npm version](https://img.shields.io/npm/v/@wentthefox-org/discord-bot-framework.svg)](https://www.npmjs.com/package/@wentthefox-org/discord-bot-framework)
+
 Shared building blocks for discord.js-based Discord bots: a nestable console
 logger, zod-based env validation, a generic HTTP API client, a slash-command
 interaction dispatcher, command registration helpers, and thin client/shard
