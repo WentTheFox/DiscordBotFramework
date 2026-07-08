@@ -38,6 +38,8 @@ export interface BotModal<Ctx> {
 }
 
 export interface BotContextMenuCommand<Ctx, T = unknown> {
+  /** When present, the command is only included in registration output if this returns true. */
+  registerCondition?: () => boolean;
   getDefinition: (t?: T) => RESTPostAPIContextMenuApplicationCommandsJSONBody;
   handle: ContextMenuHandler<Ctx>;
 }
