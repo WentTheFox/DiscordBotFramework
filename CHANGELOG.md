@@ -1,3 +1,10 @@
+# [0.2.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.1.2...v0.2.0) (2026-07-08)
+
+
+### Features
+
+* add strongly-typed command/interaction registries ([3954525](https://github.com/WentTheFox/DiscordBotFramework/commit/3954525a68906a94105605aa8e13c21095295be4))
+
 ## [0.1.2](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.1.1...v0.1.2) (2026-07-08)
 
 
