@@ -1,0 +1,133 @@
+{
+  "name": "@wentthefox/discord-bot-framework",
+  "version": "0.1.0",
+  "description": "Shared framework for building Discord bots with discord.js: logging, env validation, interaction dispatch, API client, and optional Postgres/i18next helpers",
+  "author": "WentTheFox",
+  "license": "MIT",
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WentTheFox/DiscordBotFramework.git"
+  },
+  "files": [
+    "build"
+  ],
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "default": "./build/index.js"
+    },
+    "./logger": {
+      "types": "./build/logger/index.d.ts",
+      "default": "./build/logger/index.js"
+    },
+    "./env": {
+      "types": "./build/env/index.d.ts",
+      "default": "./build/env/index.js"
+    },
+    "./api-client": {
+      "types": "./build/api-client/index.d.ts",
+      "default": "./build/api-client/index.js"
+    },
+    "./interactions": {
+      "types": "./build/interactions/index.d.ts",
+      "default": "./build/interactions/index.js"
+    },
+    "./commands": {
+      "types": "./build/commands/index.d.ts",
+      "default": "./build/commands/index.js"
+    },
+    "./client": {
+      "types": "./build/client/index.d.ts",
+      "default": "./build/client/index.js"
+    },
+    "./utils": {
+      "types": "./build/utils/index.d.ts",
+      "default": "./build/utils/index.js"
+    },
+    "./db": {
+      "types": "./build/db/index.d.ts",
+      "default": "./build/db/index.js"
+    },
+    "./i18n": {
+      "types": "./build/i18n/index.d.ts",
+      "default": "./build/i18n/index.js"
+    }
+  },
+  "scripts": {
+    "prepare": "husky",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "pnpm run lint -- --fix",
+    "build": "tsc",
+    "build:clean": "rimraf build",
+    "prepublishOnly": "pnpm run build:clean && pnpm run build",
+    "test": "vitest",
+    "test:watch": "vitest --watch"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "shell-escape": "^0.2.0",
+    "zod": "^4.1.13"
+  },
+  "peerDependencies": {
+    "@discordjs/rest": "^2.6.1",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "discord-api-types": "^0.38.43",
+    "discord.js": "^14.26.2",
+    "i18next": "^25.8.6",
+    "i18next-fs-backend": "^2.6.1"
+  },
+  "peerDependenciesMeta": {
+    "@prisma/adapter-pg": {
+      "optional": true
+    },
+    "@prisma/client": {
+      "optional": true
+    },
+    "i18next": {
+      "optional": true
+    },
+    "i18next-fs-backend": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.1.0",
+    "@commitlint/config-conventional": "^21.1.0",
+    "@discordjs/rest": "^2.6.1",
+    "@eslint/compat": "^2.0.0",
+    "@eslint/eslintrc": "^3.3.1",
+    "@eslint/js": "^9.37.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@types/node": "^24.10.13",
+    "@types/shell-escape": "^0.2.3",
+    "@typescript-eslint/eslint-plugin": "^8.46.0",
+    "@typescript-eslint/parser": "^8.46.0",
+    "discord-api-types": "^0.38.43",
+    "discord.js": "^14.26.2",
+    "eslint": "^9.37.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.3.0",
+    "husky": "^9.1.7",
+    "i18next": "^25.8.6",
+    "i18next-fs-backend": "^2.6.1",
+    "rimraf": "^6.0.1",
+    "semantic-release": "^25.0.5",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.2",
+    "vitest": "^4.0.12"
+  },
+  "packageManager": "pnpm@11.5.1",
+  "engines": {
+    "node": "24.x",
+    "pnpm": ">=11"
+  }
+}
