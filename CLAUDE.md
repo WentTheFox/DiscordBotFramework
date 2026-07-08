@@ -129,7 +129,7 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 - **Every commit message must follow Conventional Commits**
   (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:`, `chore:`, `docs:`, `refactor:`,
   `test:`, `ci:`, `build:`, `perf:`, `style:`). This is enforced by a husky
-  `commit-msg` hook (`commitlint`, config in `commitlint.config.js`) and again
+  `commit-msg` hook (`commitlint`, config in `commitlint.config.mjs`) and again
   in CI (`.github/workflows/commitlint.yml`) — a commit that doesn't declare a
   type will be rejected locally and fail CI if it somehow lands on a branch.
 - **If the correct commit type/bump for a change is ambiguous, ask the user
