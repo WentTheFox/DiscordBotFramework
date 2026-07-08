@@ -142,9 +142,18 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   `.releaserc.json`): the commit types since the last release determine the
   version bump (`fix:` → patch, `feat:` → minor, `feat!:`/`BREAKING CHANGE:`
   → major, other types → no release), `CHANGELOG.md` is generated, the
-  package is published to npm with provenance, and a GitHub Release is cut.
-  There is no manual tag-pushing step anymore — do not hand-edit
-  `package.json`'s `version` field, semantic-release owns it.
+  package is published to npm, and a GitHub Release is cut. There is no
+  manual tag-pushing step anymore — do not hand-edit `package.json`'s
+  `version` field, semantic-release owns it.
+- **npm auth uses Trusted Publishing (OIDC), not a stored `NPM_TOKEN`
+  secret.** npmjs.com is configured to trust the `Release` workflow
+  (org/repo/workflow-filename match, no GitHub Actions `environment`
+  configured) via the `id-token: write` permission in
+  `.github/workflows/release.yml`. Don't add `registry-url` to the
+  `actions/setup-node` step in that workflow — it makes `setup-node` write an
+  `.npmrc` that conflicts with semantic-release's OIDC auth and breaks
+  publishing (`EINVALIDNPMTOKEN`). Provenance attestation is automatic under
+  trusted publishing, no `--provenance`/`provenance: true` config needed.
 
 ## When migrating Fantastick or PennyCurve onto this framework
 
