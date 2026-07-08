@@ -1,7 +1,7 @@
 // Core (non-optional) modules. Optional pieces (Postgres/Prisma, i18next)
 // are only available via their own subpaths:
-//   @wentthefox/discord-bot-framework/db
-//   @wentthefox/discord-bot-framework/i18n
+//   @wentthefox-org/discord-bot-framework/db
+//   @wentthefox-org/discord-bot-framework/i18n
 export * from './logger/index.js';
 export * from './env/index.js';
 export * from './api-client/index.js';

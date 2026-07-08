@@ -2,7 +2,7 @@
 
 ## What this repo is
 
-`@wentthefox/discord-bot-framework` — a single publishable npm package
+`@wentthefox-org/discord-bot-framework` — a single publishable npm package
 extracting the shared architecture of three discord.js bots that had each
 independently reimplemented the same skeleton:
 

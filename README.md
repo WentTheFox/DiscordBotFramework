@@ -1,4 +1,4 @@
-# @wentthefox/discord-bot-framework
+# @wentthefox-org/discord-bot-framework
 
 Shared building blocks for discord.js-based Discord bots: a nestable console
 logger, zod-based env validation, a generic HTTP API client, a slash-command
@@ -15,14 +15,14 @@ design rationale and module-to-source mapping.
 ## Install
 
 ```sh
-pnpm add @wentthefox/discord-bot-framework zod discord.js @discordjs/rest discord-api-types
+pnpm add @wentthefox-org/discord-bot-framework zod discord.js @discordjs/rest discord-api-types
 ```
 
 `zod` is a real dependency of this package but must also be listed by
 consumers directly (peer resolution quirk of subpath-only usage) if you use
 `defineEnv` at your own top level. `prisma`/`@prisma/client`/`@prisma/adapter-pg`
 and `i18next`/`i18next-fs-backend` are **optional** peers — only install them
-if you import `@wentthefox/discord-bot-framework/db` or `/i18n`.
+if you import `@wentthefox-org/discord-bot-framework/db` or `/i18n`.
 
 ## Subpaths
 
@@ -30,20 +30,20 @@ Everything is available from the package root **except** `./db` and `./i18n`,
 which are kept as separate subpaths so bots that don't use Postgres/Prisma or
 i18next never need to install those peer dependencies.
 
-### `@wentthefox/discord-bot-framework/logger`
+### `@wentthefox-org/discord-bot-framework/logger`
 
 ```ts
-import { Logger, NestableLogger, DevNullLogger } from '@wentthefox/discord-bot-framework/logger';
+import { Logger, NestableLogger, DevNullLogger } from '@wentthefox-org/discord-bot-framework/logger';
 
 const logger = new Logger('Bot');
 const interactionLogger = logger.nest(`Interaction#${interaction.id}`);
 const shardLogger = Logger.fromShardInfo(process.env.SHARDS);
 ```
 
-### `@wentthefox/discord-bot-framework/env`
+### `@wentthefox-org/discord-bot-framework/env`
 
 ```ts
-import { defineEnv, boolFromString } from '@wentthefox/discord-bot-framework/env';
+import { defineEnv, boolFromString } from '@wentthefox-org/discord-bot-framework/env';
 import { z } from 'zod';
 
 export const env = defineEnv({
@@ -58,10 +58,10 @@ Throws one formatted `Error` listing every failing key. Pass `{ dotenv: false }`
 to skip loading a `.env` file, or `{ source }` to validate a fixture object
 (useful in tests).
 
-### `@wentthefox/discord-bot-framework/api-client`
+### `@wentthefox-org/discord-bot-framework/api-client`
 
 ```ts
-import { ApiClient, ApiAuthType } from '@wentthefox/discord-bot-framework/api-client';
+import { ApiClient, ApiAuthType } from '@wentthefox-org/discord-bot-framework/api-client';
 
 const apiClient = new ApiClient(logger, {
   baseUrl: `${env.API_URL}/api`,
@@ -75,10 +75,10 @@ const { response } = await apiClient.request({
 });
 ```
 
-### `@wentthefox/discord-bot-framework/interactions`
+### `@wentthefox-org/discord-bot-framework/interactions`
 
 ```ts
-import { createInteractionRouter, handleInteractionError } from '@wentthefox/discord-bot-framework/interactions';
+import { createInteractionRouter, handleInteractionError } from '@wentthefox-org/discord-bot-framework/interactions';
 
 const router = createInteractionRouter({
   commands: chatInputCommandMap,
@@ -96,10 +96,10 @@ Bots that need to run logic between a command handler and error handling
 `dispatchComponent`/`dispatchModal`/`dispatchContextMenu` directly instead of
 the combined router.
 
-### `@wentthefox/discord-bot-framework/commands`
+### `@wentthefox-org/discord-bot-framework/commands`
 
 ```ts
-import { createCommandRegistrar, fixedReplyCommandFactory } from '@wentthefox/discord-bot-framework/commands';
+import { createCommandRegistrar, fixedReplyCommandFactory } from '@wentthefox-org/discord-bot-framework/commands';
 
 const registrar = createCommandRegistrar({ rest, applicationId: env.DISCORD_CLIENT_ID, logger });
 await registrar.updateGlobalCommands(commandBodies);
@@ -107,10 +107,10 @@ await registrar.updateGlobalCommands(commandBodies);
 const pingCommand = fixedReplyCommandFactory('ping', 'Replies with pong', 'pong');
 ```
 
-### `@wentthefox/discord-bot-framework/client`
+### `@wentthefox-org/discord-bot-framework/client`
 
 ```ts
-import { createBotClient, createShardManager } from '@wentthefox/discord-bot-framework/client';
+import { createBotClient, createShardManager } from '@wentthefox-org/discord-bot-framework/client';
 
 // Single-guild / unsharded bots:
 const client = await createBotClient({ intents: [GatewayIntentBits.Guilds], token, onInteraction });
@@ -122,7 +122,7 @@ const manager = await createShardManager({
 });
 ```
 
-### `@wentthefox/discord-bot-framework/utils`
+### `@wentthefox-org/discord-bot-framework/utils`
 
 `runAttempts`, `getGitData`, `queueLazyPromises`, `condenseStringArray`,
 `sendMessageSlices`, `loadAllMessages`, `getUserIdentifier`,
@@ -131,12 +131,12 @@ channel lookups (`getServer`, `findServerTextChannelByName`,
 `findServerRoleByName`, `findServerMember`, `getServerMemberRole`,
 `serverMemberHasRole`, `isSameObject`).
 
-### `@wentthefox/discord-bot-framework/db` (optional)
+### `@wentthefox-org/discord-bot-framework/db` (optional)
 
 Requires `@prisma/client` and `@prisma/adapter-pg` (Postgres only).
 
 ```ts
-import { createPostgresPrismaDb } from '@wentthefox/discord-bot-framework/db';
+import { createPostgresPrismaDb } from '@wentthefox-org/discord-bot-framework/db';
 import { PrismaClient } from './generated/prisma/client.js';
 
 export const db = createPostgresPrismaDb(PrismaClient, { connectionString: env.DATABASE_URL });
@@ -145,12 +145,12 @@ export const db = createPostgresPrismaDb(PrismaClient, { connectionString: env.D
 Bots that only talk to an externally-managed database (or no database at
 all) never need to import this subpath or install its peer dependencies.
 
-### `@wentthefox/discord-bot-framework/i18n` (optional)
+### `@wentthefox-org/discord-bot-framework/i18n` (optional)
 
 Requires `i18next` and `i18next-fs-backend`.
 
 ```ts
-import { createI18nInitializer } from '@wentthefox/discord-bot-framework/i18n';
+import { createI18nInitializer } from '@wentthefox-org/discord-bot-framework/i18n';
 
 const initI18next = createI18nInitializer({
   localesDir: './src/locales',
