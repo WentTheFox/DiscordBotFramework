@@ -1,3 +1,10 @@
+## [0.2.1](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.0...v0.2.1) (2026-07-09)
+
+
+### Bug Fixes
+
+* support enum-keyed registries in buildApplicationCommandsBody ([ec2f9af](https://github.com/WentTheFox/DiscordBotFramework/commit/ec2f9af4e9bd0ff05478623925b19da8d8267e61))
+
 # [0.2.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.1.2...v0.2.0) (2026-07-08)
 
 
