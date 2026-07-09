@@ -1,3 +1,10 @@
+## [0.2.4](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.3...v0.2.4) (2026-07-09)
+
+
+### Bug Fixes
+
+* infer command definitionArg type through dispatch/router options ([b6042a1](https://github.com/WentTheFox/DiscordBotFramework/commit/b6042a13f19cd28217185acdc6b3b1fe0f0154d8))
+
 ## [0.2.3](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.2...v0.2.3) (2026-07-09)
 
 
