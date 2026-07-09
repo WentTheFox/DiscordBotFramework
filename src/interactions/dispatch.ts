@@ -17,16 +17,16 @@ import {
 
 export type OnDispatchError<Ctx> = (interaction: unknown, context: Ctx, error: unknown) => void | Promise<void>;
 
-export interface DispatchChatInputCommandOptions<Ctx extends BaseInteractionContext> {
-  commands: Record<string, BotChatInputCommand<Ctx>>;
+export interface DispatchChatInputCommandOptions<Ctx extends BaseInteractionContext, T = unknown> {
+  commands: Record<string, BotChatInputCommand<Ctx, T>>;
   onUnknownCommand?: (interaction: ChatInputCommandInteraction, context: Ctx) => void | Promise<void>;
   onError: OnDispatchError<Ctx>;
 }
 
-export async function dispatchChatInputCommand<Ctx extends BaseInteractionContext>(
+export async function dispatchChatInputCommand<Ctx extends BaseInteractionContext, T = unknown>(
   interaction: ChatInputCommandInteraction,
   context: Ctx,
-  options: DispatchChatInputCommandOptions<Ctx>,
+  options: DispatchChatInputCommandOptions<Ctx, T>,
 ): Promise<void> {
   const command = options.commands[interaction.commandName];
   if (!command) {
@@ -45,15 +45,15 @@ export async function dispatchChatInputCommand<Ctx extends BaseInteractionContex
   }
 }
 
-export interface DispatchAutocompleteOptions<Ctx extends BaseInteractionContext> {
-  commands: Record<string, BotChatInputCommand<Ctx>>;
+export interface DispatchAutocompleteOptions<Ctx extends BaseInteractionContext, T = unknown> {
+  commands: Record<string, BotChatInputCommand<Ctx, T>>;
   onError: OnDispatchError<Ctx>;
 }
 
-export async function dispatchAutocomplete<Ctx extends BaseInteractionContext>(
+export async function dispatchAutocomplete<Ctx extends BaseInteractionContext, T = unknown>(
   interaction: AutocompleteInteraction,
   context: Ctx,
-  options: DispatchAutocompleteOptions<Ctx>,
+  options: DispatchAutocompleteOptions<Ctx, T>,
 ): Promise<void> {
   const command = options.commands[interaction.commandName];
   try {
@@ -129,16 +129,16 @@ export async function dispatchModal<Ctx extends BaseInteractionContext>(
   }
 }
 
-export interface DispatchContextMenuOptions<Ctx extends BaseInteractionContext> {
-  contextMenuCommands: Record<string, BotContextMenuCommand<Ctx>>;
+export interface DispatchContextMenuOptions<Ctx extends BaseInteractionContext, T = unknown> {
+  contextMenuCommands: Record<string, BotContextMenuCommand<Ctx, T>>;
   onUnknownCommand?: (interaction: UserContextMenuCommandInteraction | MessageContextMenuCommandInteraction, context: Ctx) => void | Promise<void>;
   onError: OnDispatchError<Ctx>;
 }
 
-export async function dispatchContextMenu<Ctx extends BaseInteractionContext>(
+export async function dispatchContextMenu<Ctx extends BaseInteractionContext, T = unknown>(
   interaction: UserContextMenuCommandInteraction | MessageContextMenuCommandInteraction,
   context: Ctx,
-  options: DispatchContextMenuOptions<Ctx>,
+  options: DispatchContextMenuOptions<Ctx, T>,
 ): Promise<void> {
   const command = options.contextMenuCommands[interaction.commandName];
   if (!command) {
