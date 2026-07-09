@@ -42,31 +42,29 @@ function buildRegistry<Name extends string, T>(items: readonly T[], keyOf: (item
 }
 
 export function createChatInputCommandRegistry<
-  Ctx extends BaseInteractionContext,
-  T,
-  const Commands extends readonly NamedChatInputCommand<Ctx, string, T>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Ctx/T are only used to validate array element shape; TS can't back-infer them from a `const`-inferred array constraint, so pinning them narrows the constraint instead of widening it. Commands[number] (used below) is still the precise element type.
+  const Commands extends readonly NamedChatInputCommand<any, string, any>[],
 >(commands: Commands): Registry<Commands[number]['name'], Commands[number]> {
   return buildRegistry(commands, (c) => c.name) as Registry<Commands[number]['name'], Commands[number]>;
 }
 
 export function createContextMenuCommandRegistry<
-  Ctx extends BaseInteractionContext,
-  T,
-  const Commands extends readonly NamedContextMenuCommand<Ctx, string, T>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see createChatInputCommandRegistry above
+  const Commands extends readonly NamedContextMenuCommand<any, string, any>[],
 >(commands: Commands): Registry<Commands[number]['name'], Commands[number]> {
   return buildRegistry(commands, (c) => c.name) as Registry<Commands[number]['name'], Commands[number]>;
 }
 
 export function createComponentRegistry<
-  Ctx extends BaseInteractionContext,
-  const Components extends readonly NamedComponent<Ctx, string>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see createChatInputCommandRegistry above
+  const Components extends readonly NamedComponent<any, string>[],
 >(components: Components): Registry<Components[number]['id'], Components[number]> {
   return buildRegistry(components, (c) => c.id) as Registry<Components[number]['id'], Components[number]>;
 }
 
 export function createModalRegistry<
-  Ctx extends BaseInteractionContext,
-  const Modals extends readonly NamedModal<Ctx, string>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see createChatInputCommandRegistry above
+  const Modals extends readonly NamedModal<any, string>[],
 >(modals: Modals): Registry<Modals[number]['id'], Modals[number]> {
   return buildRegistry(modals, (m) => m.id) as Registry<Modals[number]['id'], Modals[number]>;
 }
