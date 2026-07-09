@@ -99,6 +99,44 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 - **Explicitly dropped, do not port forward:** PennyCurve's unused
   `BotCommandPermission` type (dead code, never implemented anywhere) and its
   unread `SUSPICIOUS_NAMES` env var.
+- **Commands/components/modals carry their own `name`/`id` field; the
+  registry key is always the single source of truth for it.** Before the
+  registry mechanism (`src/interactions/registry.ts`), every bot hand-wrote
+  a `const enum` of names/ids plus a manually-synced `Record<Enum, T>`
+  aggregator map — pure duplicated boilerplate the framework can own instead.
+  `createChatInputCommandRegistry`/`createContextMenuCommandRegistry`/
+  `createComponentRegistry`/`createModalRegistry` take a plain array of
+  self-describing objects (`{ name, ... }` or `{ id, ... }`) and derive the
+  literal name/id union straight from the array via TS 5 `const` type
+  parameters — no hand-written enum needed, full typo/exhaustiveness safety
+  preserved. `Registry.byName` is exactly the `Record<string, T>` shape
+  `dispatch.ts`/`router.ts` already accepted, so those files needed **zero**
+  changes for this. `buildApplicationCommandsBody`
+  (`src/commands/build-application-commands-body.ts`) is the matching piece
+  for command *registration*: it flattens one or more registries into the
+  flat JSON body `createCommandRegistrar` expects, always overwrites
+  `getDefinition()`'s own `name` with the registry key (registry wins, not
+  `getDefinition`), and auto-applies a stable required-options-first sort
+  (recursing into subcommand/subcommand-group options) rather than throwing
+  if a bot got the ordering wrong — Discord's own rejection in that case is
+  ambiguous, so silently fixing it is strictly better than surfacing a
+  confusing API error.
+- **Modal dispatch stays a thin adapter, not a first-class registry
+  concept**, because Fantastick's real shape nests a `.modal: Record<ModalId,
+  ModalHandler<Ctx>>` map on the *owning chat-input command* rather than
+  registering modals as a standalone top-level map. `flattenCommandModals`
+  synthesizes a flat `Registry<string, BotModal<Ctx>>` view over every
+  command's nested `.modal` map so the existing `dispatchModal` (unchanged)
+  can consume it directly — don't add modal-specific branching to
+  `dispatch.ts` itself.
+- **Component registries only require `{ id, handle }`** — they deliberately
+  do **not** standardize a `getDefinition`/`factory` shape for building the
+  component's wire representation, because HammerTimeBot/Fantastick's
+  `getDefinition(t, emojiIdMap, idSuffix?)` and PennyCurve's `factory()` are
+  genuinely different shapes, and components (unlike commands) are never
+  pre-registered with Discord, so there's no shared "flatten to JSON" need
+  driving unification. Bots keep whatever extra field they want alongside
+  `id`/`handle`.
 
 ## Module → source mapping
 
@@ -111,6 +149,8 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 | `src/interactions/dispatch.ts`, `router.ts` | Generalized from HammerTimeBot/Fantastick's `interaction-handlers/handle-*.ts` + PennyCurve's `interaction-handlers.ts` |
 | `src/commands/registration.ts` | `HammerTimeBot/src/utils/update-guild-commands.ts` |
 | `src/commands/fixed-reply-command-factory.ts` | `PennyCurve/src/utils/fixed-reply-command-factory.ts` |
+| `src/interactions/registry.ts` | Generalized from all three bots' hand-written `const enum` + `Record<Enum, T>` aggregator map pattern |
+| `src/commands/build-application-commands-body.ts` | `HammerTimeBot/src/utils/get-application-commands.ts` |
 | `src/client/create-bot-client.ts` | `PennyCurve/src/create-client.ts` (unsharded shape) |
 | `src/client/create-shard-manager.ts` | `HammerTimeBot/src/index.ts` + `Fantastick/src/index.ts` (near-identical `ShardingManager` setup) |
 | `src/utils/run-attempts.ts` | `Fantastick/src/utils/run-attempts.ts` (verbatim) |
@@ -136,6 +176,12 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 
 ## Commits & releases
 
+- **Every commit that changes public behavior, adds/removes an export, or
+  changes a non-obvious design decision must update `README.md` and/or
+  `CLAUDE.md` in the same commit**, whichever is relevant to what changed —
+  new subpath usage goes in `README.md`, new "don't relitigate this" design
+  rationale goes in `CLAUDE.md`'s design-decisions/module-mapping sections.
+  Docs are treated as part of the change, not a follow-up.
 - **Every commit message must follow Conventional Commits**
   (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:`, `chore:`, `docs:`, `refactor:`,
   `test:`, `ci:`, `build:`, `perf:`, `style:`). This is enforced by a husky

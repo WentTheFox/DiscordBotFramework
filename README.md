@@ -79,12 +79,25 @@ const { response } = await apiClient.request({
 
 ### `@wentthefox-org/discord-bot-framework/interactions`
 
+Commands/components/modals are self-describing — put the name/id directly on
+the object (as `name` or `id`) and pass an array to a `createXRegistry()`
+helper instead of hand-writing a `Record<Enum, Handler>` map. The registry
+derives the literal name/id union from the array itself (TS 5 `const` type
+params), so there's no separate enum to keep in sync, and `registry.byName`
+is a drop-in `commands`/`components`/`modals` value for
+`createInteractionRouter`/the `dispatch*` functions below.
+
 ```ts
-import { createInteractionRouter, handleInteractionError } from '@wentthefox-org/discord-bot-framework/interactions';
+import { createChatInputCommandRegistry, createComponentRegistry, createInteractionRouter, handleInteractionError } from '@wentthefox-org/discord-bot-framework/interactions';
+
+const pingCommand = { name: 'ping', getDefinition: () => ({ name: 'ping', description: 'Replies with pong' }), handle: (interaction) => interaction.reply('pong') };
+
+const chatInputCommandRegistry = createChatInputCommandRegistry([pingCommand /* , ... */]);
+const componentRegistry = createComponentRegistry([/* ... */]);
 
 const router = createInteractionRouter({
-  commands: chatInputCommandMap,
-  components: messageComponentMap,
+  commands: chatInputCommandRegistry.byName,
+  components: componentRegistry.byName,
   buildContext: async (interaction, baseContext) => ({ ...baseContext, t: await buildT(interaction) }),
   onError: (interaction, context, error) =>
     handleInteractionError(interaction, context, { buildMessage: () => context.t('errors.unexpected') }),
@@ -96,18 +109,39 @@ client.on(Events.InteractionCreate, (interaction) => router(interaction, baseCon
 Bots that need to run logic between a command handler and error handling
 (e.g. telemetry) can call `dispatchChatInputCommand`/`dispatchAutocomplete`/
 `dispatchComponent`/`dispatchModal`/`dispatchContextMenu` directly instead of
-the combined router.
+the combined router — both take the same `registry.byName` maps.
+
+There's also `createContextMenuCommandRegistry`/`createModalRegistry` for the
+other two interaction kinds, and `flattenCommandModals(chatInputRegistry)`
+for bots that nest a `.modal` map directly on the owning chat-input command
+(rather than registering modals as a standalone top-level registry) — it
+synthesizes a flat `Registry<string, BotModal<Ctx>>` view so `dispatchModal`
+can consume it unchanged.
 
 ### `@wentthefox-org/discord-bot-framework/commands`
 
 ```ts
-import { createCommandRegistrar, fixedReplyCommandFactory } from '@wentthefox-org/discord-bot-framework/commands';
+import { buildApplicationCommandsBody, createCommandRegistrar, fixedReplyCommandFactory } from '@wentthefox-org/discord-bot-framework/commands';
 
 const registrar = createCommandRegistrar({ rest, applicationId: env.DISCORD_CLIENT_ID, logger });
+
+const commandBodies = buildApplicationCommandsBody(
+  { chatInput: chatInputCommandRegistry, contextMenu: contextMenuCommandRegistry },
+  { sharedMetadata: { integration_types: [...], contexts: [...] }, definitionArg: t },
+);
 await registrar.updateGlobalCommands(commandBodies);
 
 const pingCommand = fixedReplyCommandFactory('ping', 'Replies with pong', 'pong');
 ```
+
+`buildApplicationCommandsBody` flattens one or more command registries into
+the flat JSON body `createCommandRegistrar` expects: it applies each
+command's `registerCondition` filter, merges `sharedMetadata` into every
+`getDefinition()` result (the command's own fields win, except `name`, which
+always comes from the registry key — command authors never need to repeat
+`name` inside `getDefinition`'s return), and stably sorts every options array
+(including nested subcommand/subcommand-group options) so required options
+precede optional ones, matching Discord's API requirement automatically.
 
 ### `@wentthefox-org/discord-bot-framework/client`
 

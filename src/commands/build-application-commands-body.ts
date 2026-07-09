@@ -13,9 +13,21 @@ export interface BuildApplicationCommandsBodyOptions<T> {
   definitionArg?: T;
 }
 
-export interface BuildApplicationCommandsBodyRegistries<T> {
-  chatInput?: Registry<string, { registerCondition?: () => boolean; getDefinition: (t?: T) => RESTPostAPIApplicationCommandsJSONBody; name: string }>;
-  contextMenu?: Registry<string, { registerCondition?: () => boolean; getDefinition: (t?: T) => RESTPostAPIApplicationCommandsJSONBody; name: string }>;
+export type RegisterableCommand<T, Name extends string = string> = {
+  registerCondition?: () => boolean;
+  getDefinition: (t?: T) => RESTPostAPIApplicationCommandsJSONBody;
+  name: Name;
+};
+
+export interface BuildApplicationCommandsBodyRegistries<
+  T,
+  ChatInputName extends string = string,
+  ChatInputCommand extends RegisterableCommand<T, ChatInputName> = RegisterableCommand<T, ChatInputName>,
+  ContextMenuName extends string = string,
+  ContextMenuCommand extends RegisterableCommand<T, ContextMenuName> = RegisterableCommand<T, ContextMenuName>,
+> {
+  chatInput?: Registry<ChatInputName, ChatInputCommand>;
+  contextMenu?: Registry<ContextMenuName, ContextMenuCommand>;
 }
 
 function sortRequiredOptionsFirst(options: APIApplicationCommandOption[] | undefined): APIApplicationCommandOption[] | undefined {
@@ -40,16 +52,21 @@ function sortRequiredOptionsFirst(options: APIApplicationCommandOption[] | undef
  * requirement without every command author having to get the ordering right
  * by hand.
  */
-export function buildApplicationCommandsBody<T>(
-  registries: BuildApplicationCommandsBodyRegistries<T>,
+export function buildApplicationCommandsBody<
+  T,
+  ChatInputName extends string = string,
+  ChatInputCommand extends RegisterableCommand<T, ChatInputName> = RegisterableCommand<T, ChatInputName>,
+  ContextMenuName extends string = string,
+  ContextMenuCommand extends RegisterableCommand<T, ContextMenuName> = RegisterableCommand<T, ContextMenuName>,
+>(
+  registries: BuildApplicationCommandsBodyRegistries<T, ChatInputName, ChatInputCommand, ContextMenuName, ContextMenuCommand>,
   options: BuildApplicationCommandsBodyOptions<T> = {},
 ): RESTPostAPIApplicationCommandsJSONBody[] {
   const { sharedMetadata = {}, definitionArg } = options;
   const body: RESTPostAPIApplicationCommandsJSONBody[] = [];
 
-  const registryLists = [registries.chatInput, registries.contextMenu];
-  for (const registry of registryLists) {
-    if (!registry) continue;
+  function appendRegistry<Name extends string, Command extends RegisterableCommand<T, Name>>(registry: Registry<Name, Command> | undefined): void {
+    if (!registry) return;
     for (const name of registry.names) {
       const command = registry.byName[name];
       if (command.registerCondition && !command.registerCondition()) continue;
@@ -64,6 +81,9 @@ export function buildApplicationCommandsBody<T>(
       body.push(definition);
     }
   }
+
+  appendRegistry(registries.chatInput);
+  appendRegistry(registries.contextMenu);
 
   return body;
 }
