@@ -43,14 +43,16 @@ function buildRegistry<Name extends string, T>(items: readonly T[], keyOf: (item
 
 export function createChatInputCommandRegistry<
   Ctx extends BaseInteractionContext,
-  const Commands extends readonly NamedChatInputCommand<Ctx, string>[],
+  T,
+  const Commands extends readonly NamedChatInputCommand<Ctx, string, T>[],
 >(commands: Commands): Registry<Commands[number]['name'], Commands[number]> {
   return buildRegistry(commands, (c) => c.name) as Registry<Commands[number]['name'], Commands[number]>;
 }
 
 export function createContextMenuCommandRegistry<
   Ctx extends BaseInteractionContext,
-  const Commands extends readonly NamedContextMenuCommand<Ctx, string>[],
+  T,
+  const Commands extends readonly NamedContextMenuCommand<Ctx, string, T>[],
 >(commands: Commands): Registry<Commands[number]['name'], Commands[number]> {
   return buildRegistry(commands, (c) => c.name) as Registry<Commands[number]['name'], Commands[number]>;
 }
