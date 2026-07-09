@@ -1,3 +1,10 @@
+## [0.2.2](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.1...v0.2.2) (2026-07-09)
+
+
+### Bug Fixes
+
+* infer definitionArg type in chat-input/context-menu registries ([3d5449b](https://github.com/WentTheFox/DiscordBotFramework/commit/3d5449bda7375010afe5501bf508b3cb8012a6ed))
+
 ## [0.2.1](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.0...v0.2.1) (2026-07-09)
 
 
