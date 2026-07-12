@@ -78,7 +78,8 @@ export function createModalRegistry<
  * owning command's `modal[modalId]`.
  */
 export function flattenCommandModals<Ctx extends BaseInteractionContext>(
-  chatInputRegistry: Registry<string, NamedChatInputCommand<Ctx>>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see createChatInputCommandRegistry above; T never affects the return type here, only Ctx does.
+  chatInputRegistry: Registry<string, NamedChatInputCommand<Ctx, string, any>>,
 ): Registry<string, BotModal<Ctx>> {
   const modals: NamedModal<Ctx>[] = [];
   for (const command of chatInputRegistry.names.map((name) => chatInputRegistry.byName[name])) {
