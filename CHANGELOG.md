@@ -1,3 +1,10 @@
+## [0.2.6](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.5...v0.2.6) (2026-07-12)
+
+
+### Bug Fixes
+
+* infer modal handler's definitionArg type in flattenCommandModals ([084e3d0](https://github.com/WentTheFox/DiscordBotFramework/commit/084e3d02f55f833a592f1a9b30378b5791d993a2))
+
 ## [0.2.5](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.4...v0.2.5) (2026-07-12)
 
 
