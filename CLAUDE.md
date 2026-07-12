@@ -99,6 +99,15 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 - **Explicitly dropped, do not port forward:** PennyCurve's unused
   `BotCommandPermission` type (dead code, never implemented anywhere) and its
   unread `SUSPICIOUS_NAMES` env var.
+- **`src/utils/messaging.ts`'s `getUserIdentifier` must handle Discord's
+  username-migration accounts (`discriminator === '0'` → `@username`, not
+  `username#0`).** The original extraction missed this — HammerTimeBot and
+  Fantastick had each already independently patched their *local* copies of
+  this function for it (via a `getUserFriendCode` helper) before either
+  migrated onto this package, so the plain `username#discriminator` version
+  that shipped here was a regression versus both source bots, not a
+  simplification. `stringifyOptionsData`'s `User`-option branch depends on
+  this being correct.
 - **Commands/components/modals carry their own `name`/`id` field; the
   registry key is always the single source of truth for it.** Before the
   registry mechanism (`src/interactions/registry.ts`), every bot hand-wrote

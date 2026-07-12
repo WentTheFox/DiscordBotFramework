@@ -39,7 +39,16 @@ export async function loadAllMessages(channel: BaseGuildTextChannel): Promise<Co
   return allMessages;
 }
 
-export const getUserIdentifier = (user: User): `${string}#${string} (${string})` => `${user.username}#${user.discriminator} (${user.id})`;
+type UserFriendCode = `@${string}` | `${string}#${string}`;
+
+/**
+ * Formats a user as `@username` (the post-migration username system) or
+ * `username#discriminator` (legacy accounts, `discriminator !== '0'`).
+ */
+export const getUserFriendCode = (user: User): UserFriendCode =>
+  user.discriminator === '0' ? `@${user.username}` : `${user.username}#${user.discriminator}`;
+
+export const getUserIdentifier = (user: User): `${UserFriendCode} (${string})` => `${getUserFriendCode(user)} (${user.id})`;
 
 export const stringifyChannelName = (channel: CommandInteraction['channel']): string => {
   if (channel) {
