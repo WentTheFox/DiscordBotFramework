@@ -1,3 +1,10 @@
+## [0.2.5](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.4...v0.2.5) (2026-07-12)
+
+
+### Bug Fixes
+
+* handle post-migration usernames in getUserIdentifier ([c86adcb](https://github.com/WentTheFox/DiscordBotFramework/commit/c86adcb4cf4a31a031efbd30fb7b25e24b317c9d))
+
 ## [0.2.4](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.3...v0.2.4) (2026-07-09)
 
 
