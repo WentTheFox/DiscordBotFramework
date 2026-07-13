@@ -1,3 +1,18 @@
+# [1.0.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.3.0...v1.0.0) (2026-07-13)
+
+
+* feat!: migrate logger to pino with a homegrown Discord-webhook transport ([e4a8a70](https://github.com/WentTheFox/DiscordBotFramework/commit/e4a8a702092037f9c7d843e85e5e70fdebd8e50d)), closes [Interaction#1](https://github.com/Interaction/issues/1)
+
+
+### BREAKING CHANGES
+
+* console log output now includes a colorized timestamp and
+level prefix in addition to the existing bracket prefix, and the package
+gains three new hard runtime dependencies (pino, pino-pretty,
+pino-abstract-transport).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+
 # [0.3.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.6...v0.3.0) (2026-07-13)
 
 
