@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.6...v0.3.0) (2026-07-13)
+
+
+### Features
+
+* **api-client:** add retry with exponential backoff ([adf4cc7](https://github.com/WentTheFox/DiscordBotFramework/commit/adf4cc779415f556544cfa3911014d30a338f868))
+
 ## [0.2.6](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.2.5...v0.2.6) (2026-07-12)
 
 
