@@ -50,4 +50,68 @@ describe('ApiClient', () => {
 
     await expect(client.request({ path: '/thing' })).rejects.toMatchObject({ status: 500 });
   });
+
+  describe('retry', () => {
+    it('retries on 5xx and succeeds', async () => {
+      const fetchImpl = vi.fn()
+        .mockResolvedValueOnce(new Response('err', { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        retry: { maxAttempts: 2, initialDelayMs: 0 },
+      }, fetchImpl);
+
+      const { response } = await client.request({ path: '/thing' });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(response).toEqual({ ok: true });
+    });
+
+    it('retries on 429', async () => {
+      const fetchImpl = vi.fn()
+        .mockResolvedValueOnce(new Response('rate limited', { status: 429 }))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        retry: { maxAttempts: 2, initialDelayMs: 0 },
+      }, fetchImpl);
+
+      await client.request({ path: '/thing' });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry on 4xx (except 429)', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        retry: { maxAttempts: 3, initialDelayMs: 0 },
+      }, fetchImpl);
+
+      await expect(client.request({ path: '/thing' })).rejects.toMatchObject({ status: 404 });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws after exhausting all attempts', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(new Response('err', { status: 500 }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        retry: { maxAttempts: 3, initialDelayMs: 0 },
+      }, fetchImpl);
+
+      await expect(client.request({ path: '/thing' })).rejects.toMatchObject({ status: 500 });
+      expect(fetchImpl).toHaveBeenCalledTimes(3);
+    });
+
+    it('respects custom shouldRetry', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(new Response('err', { status: 500 }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        retry: { maxAttempts: 3, initialDelayMs: 0, shouldRetry: () => false },
+      }, fetchImpl);
+
+      await expect(client.request({ path: '/thing' })).rejects.toMatchObject({ status: 500 });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+  });
 });

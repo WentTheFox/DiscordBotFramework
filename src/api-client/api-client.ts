@@ -3,6 +3,13 @@ import { NestableLogger } from '../logger/types.js';
 import { ApiHttpException } from './api-http-exception.js';
 import { ApiAuthType, ApiClientOptions, ApiRequest, ApiResponse } from './types.js';
 
+const defaultShouldRetry = (error: unknown): boolean => {
+  if (error instanceof ApiHttpException) {
+    return error.status >= 500 || error.status === 429;
+  }
+  return true;
+};
+
 export class ApiClient {
   constructor(
     private logger: NestableLogger,
@@ -12,6 +19,28 @@ export class ApiClient {
   }
 
   public async request<T>(params: ApiRequest<T>): Promise<ApiResponse<T>> {
+    const {
+      maxAttempts = 1,
+      initialDelayMs = 500,
+      shouldRetry = defaultShouldRetry,
+    } = this.options.retry ?? {};
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.doRequest(params);
+      } catch (e) {
+        lastError = e;
+        if (attempt === maxAttempts - 1 || !shouldRetry(e)) throw e;
+        const delay = initialDelayMs * 2 ** attempt;
+        this.logger.warn(`Request failed (attempt ${attempt + 1}/${maxAttempts}), retrying in ${delay}ms…`, e);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    throw lastError;
+  }
+
+  private async doRequest<T>(params: ApiRequest<T>): Promise<ApiResponse<T>> {
     const {
       failOnInvalidResponse = true,
       query,

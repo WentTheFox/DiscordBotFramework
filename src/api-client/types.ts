@@ -89,9 +89,27 @@ export interface ApiResponse<T> {
   status: number;
 }
 
+export interface RetryOptions {
+  /**
+   * Total number of attempts (first try + retries).
+   * @default 1 (no retries)
+   */
+  maxAttempts?: number;
+  /**
+   * Delay before the first retry in milliseconds. Doubles on each subsequent retry.
+   * @default 500
+   */
+  initialDelayMs?: number;
+  /**
+   * Return true to retry after this error. By default retries on 5xx and 429.
+   */
+  shouldRetry?: (error: unknown) => boolean;
+}
+
 export interface ApiClientOptions {
   baseUrl: string;
   authentication?: Readonly<ApiAuthMethod>;
   fixedHeaders?: Readonly<Record<string, string>>;
   userAgent?: string;
+  retry?: RetryOptions;
 }
