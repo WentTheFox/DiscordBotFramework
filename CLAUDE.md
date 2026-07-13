@@ -194,9 +194,16 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 - **Every commit message must follow Conventional Commits**
   (`feat:`, `fix:`, `feat!:`/`BREAKING CHANGE:`, `chore:`, `docs:`, `refactor:`,
   `test:`, `ci:`, `build:`, `perf:`, `style:`). This is enforced by a husky
-  `commit-msg` hook (`commitlint`, config in `commitlint.config.mjs`) and again
-  in CI (`.github/workflows/commitlint.yml`) — a commit that doesn't declare a
-  type will be rejected locally and fail CI if it somehow lands on a branch.
+  `commit-msg` hook (`commitlint`, config in `commitlint.config.mjs`) locally,
+  by `.github/workflows/commitlint.yml` on pull requests, and by a
+  `commitlint` job inside `.github/workflows/release.yml` itself (the
+  `release` job has `needs: commitlint`) — so a push to `main` containing a
+  non-conforming commit message (e.g. from a hook bypassed with `--no-verify`,
+  or a squash-merge with a bad title) fails before `semantic-release` ever
+  runs, instead of racing it. Don't drop that `needs:` dependency or split
+  commitlint back into a same-triggers-but-unlinked workflow — two workflows
+  that both trigger on `push: [main]` run in parallel with no ordering
+  guarantee between them.
 - **If the correct commit type/bump for a change is ambiguous, ask the user
   before committing** rather than guessing. This repo publishes automatically
   on every push to `main` (see below) — a wrong `feat:`/`fix:` vs `chore:`

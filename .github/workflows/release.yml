@@ -5,7 +5,18 @@ on:
     branches: [main]
 
 jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6
+        with:
+          configFile: commitlint.config.mjs
+
   release:
+    needs: commitlint
     runs-on: ubuntu-latest
     permissions:
       contents: write
