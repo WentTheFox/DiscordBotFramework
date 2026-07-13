@@ -138,6 +138,43 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   command's nested `.modal` map so the existing `dispatchModal` (unchanged)
   can consume it directly — don't add modal-specific branching to
   `dispatch.ts` itself.
+- **`src/logger/` is backed by pino, not raw `console.*`**, chosen over winston for
+  wider adoption and because pino's `.child()`/transport-worker model maps cleanly
+  onto this module's existing `nest()` semantics. Discord-webhook log delivery is a
+  **homegrown pino transport** (`src/logger/discord-webhook-transport.ts`, built on
+  the official `pino-abstract-transport` primitive + native `fetch`), not a
+  third-party `pino-discord-*`/`winston-discord-*` package — the ones that exist were
+  checked and are either stale or pull in a full `discord.js`/`discord-api-types`
+  dependency just to POST a webhook, not worth it for something this small.
+  `src/logger/discord-webhook-batcher.ts` batches log records on a **fixed interval**
+  (default 20s) rather than POSTing per log call — this gives a hard, by-construction
+  cap on request volume safely under Discord's per-webhook rate limits without a
+  separate token-bucket, at the cost of up to `batchIntervalMs` of delivery latency
+  (acceptable for a logging sink, not for anything latency-sensitive).
+  `pino`/`pino-pretty`/`pino-abstract-transport` are core `dependencies` (not
+  peer, unlike `./db`/`./i18n`'s optional pieces) since `./logger` is always
+  re-exported from the package root and `pino-pretty` is needed by default just to
+  keep the console output close to this module's original bracket-prefixed look.
+- **`Logger` (plain `new Logger(prefix)`/`Logger.fromShardInfo`) and `createLogger(options)`
+  are two different entry points, mirroring the `createPostgresPrismaDb`/
+  `createBotClient` factory pattern.** `new Logger()` builds a bare, synchronous pino
+  root (pino-pretty's stream passed directly, no `pino.transport()`) — no worker
+  thread, console-only. `createLogger()` is the **only** place `pino.transport()` is
+  ever invoked, building one root pino instance with whichever targets (console +
+  optional Discord webhook) were requested. **`nest()`/`muteMethods()` always reuse
+  the existing instance's `.child()`** (via `Logger.withPino`, internal) rather than
+  constructing a new pino root — constructing a new root per `nest()` call would leak
+  a new transport worker thread every time a bot nests a logger (e.g. per-interaction
+  in `dispatch.ts`), which happens constantly. Each `.child()` call binds a single
+  pre-formatted `prefixLabel` string (not a raw prefix array), keeping pino-pretty's
+  `messageFormat` a plain, worker-serializable string template
+  (`'{prefixLabel}{msg}'`) instead of a function.
+- **`LogMethod`'s `'log'` maps onto pino's `info` level** — pino has no native `log`
+  level, and `log`/`info` were visually indistinguishable in the pre-pino console
+  output anyway. **`muteMethods()` stays a wrapper-side `Set<LogMethod>` check**
+  performed before ever touching the underlying pino instance, not implemented via
+  pino's own numeric `level` threshold — pino has one threshold, not an arbitrary
+  per-method mute set, so this couldn't be expressed as native pino config.
 - **Component registries only require `{ id, handle }`** — they deliberately
   do **not** standardize a `getDefinition`/`factory` shape for building the
   component's wire representation, because HammerTimeBot/Fantastick's
@@ -151,7 +188,7 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 
 | Framework module | Ported from |
 |---|---|
-| `src/logger/` | `HammerTimeBot/src/classes/logger.ts`, `Fantastick/src/classes/logger.ts` (near-identical) |
+| `src/logger/` | `HammerTimeBot/src/classes/logger.ts`, `Fantastick/src/classes/logger.ts` (near-identical); rewritten onto pino, `NestableLogger` contract unchanged |
 | `src/env/` | Pattern generalized from all three bots' `src/env.ts` |
 | `src/api-client/` | `Fantastick/src/classes/api-client.ts` (most generic of the three; supersedes HammerTimeBot's `backend-api-request.ts`) |
 | `src/interactions/handle-interaction-error.ts` | Near-identical logic in all three bots' `handle-interaction-error.ts` |

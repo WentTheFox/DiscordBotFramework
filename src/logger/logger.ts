@@ -1,91 +1,95 @@
+import { format } from 'node:util';
+import pino from 'pino';
+import pretty from 'pino-pretty';
 import { LogMethod, NestableLogger } from './types.js';
+import { PINO_PRETTY_OPTIONS } from './pino-pretty-options.js';
+
+function toArray(value: string | string[]): string[] {
+  return Array.isArray(value) ? value : [value];
+}
+
+function toSet(value: LogMethod[] | Set<LogMethod>): Set<LogMethod> {
+  return Array.isArray(value) ? new Set(value) : value;
+}
+
+function formatPrefixLabel(prefixes: string[]): string {
+  return prefixes.length === 0 ? '' : `[${prefixes.join('][')}] `;
+}
 
 export class Logger implements NestableLogger {
-  protected prefixes: string[] = [];
+  protected prefixes: string[];
 
-  protected prefixString = '';
+  protected mutedMethods: Set<LogMethod>;
 
-  protected mutedMethods = new Set<LogMethod>();
+  protected pino: pino.Logger;
 
   constructor(prefix: string | string[] = [], mutedMethods: LogMethod[] | Set<LogMethod> = []) {
-    this.setPrefix(prefix);
-    this.setMutedMethods(mutedMethods);
+    this.prefixes = toArray(prefix);
+    this.mutedMethods = toSet(mutedMethods);
+    // Bare constructor stays worker-thread-free: pino-pretty's stream is built
+    // synchronously in-process here, unlike createLogger()'s pino.transport() path.
+    const root = pino({ level: 'trace' }, pretty(PINO_PRETTY_OPTIONS));
+    this.pino = root.child({ prefixLabel: formatPrefixLabel(this.prefixes) });
   }
 
-  debug(...params: unknown[]): void {
-    if (this.mutedMethods.has('debug')) return;
-    console.debug(...this.addPrefixToLog(params));
-  }
-
-  info(...params: unknown[]): void {
-    if (this.mutedMethods.has('info')) return;
-    console.info(...this.addPrefixToLog(params));
-  }
-
-  log(...params: unknown[]): void {
-    if (this.mutedMethods.has('log')) return;
-    console.log(...this.addPrefixToLog(params));
-  }
-
-  warn(...params: unknown[]): void {
-    if (this.mutedMethods.has('warn')) return;
-    console.warn(...this.addPrefixToLog(params));
-  }
-
-  error(...params: unknown[]): void {
-    if (this.mutedMethods.has('error')) return;
-    console.error(...this.addPrefixToLog(params));
-  }
-
-  private setPrefix(rawPrefix: string | string[]) {
-    const rawPrefixArray = Array.isArray(rawPrefix) ? rawPrefix : [rawPrefix];
-    if (this.prefixes.length > 0) {
-      const previousPrefix = this.prefixes;
-      this.prefixes.splice(-1, 1, ...rawPrefixArray);
-      this.info(`Prefix changed (previous: ${previousPrefix.join(',')})`);
-    } else {
-      this.prefixes = rawPrefixArray;
-    }
-    this.prefixString = `[${this.prefixes.join('][')}]`;
-  }
-
-  private setMutedMethods(mutedMethods: LogMethod[] | Set<LogMethod>): void {
-    this.mutedMethods = Array.isArray(mutedMethods) ? new Set(mutedMethods) : mutedMethods;
-  }
-
-  protected static getPrefixForShardsValue(shards: string) {
-    return `Shard#${shards}`;
+  /**
+   * Builds a Logger from an existing pino instance via `.child()`, reusing whatever
+   * transport (or lack thereof) the parent already has, rather than constructing a
+   * new pino root. Used internally by `nest()`, `muteMethods()`, and `createLogger()`
+   * so nested loggers never spawn additional `pino.transport()` worker threads.
+   */
+  static withPino(parentPino: pino.Logger, prefixes: string[], mutedMethods: Set<LogMethod>): Logger {
+    const instance = Object.create(Logger.prototype) as Logger;
+    instance.prefixes = prefixes;
+    instance.mutedMethods = mutedMethods;
+    instance.pino = parentPino.child({ prefixLabel: formatPrefixLabel(prefixes) });
+    return instance;
   }
 
   static fromShardInfo(shards: string | string[] = ''): Logger {
     const shardsSuffix = Array.isArray(shards) ? shards.join(',') : shards;
-    const prefix = this.getPrefixForShardsValue(shardsSuffix);
-    return new Logger(prefix);
+    return new Logger(`Shard#${shardsSuffix}`);
   }
 
-  protected addPrefixToLog<T>(params: T[]): (T | string)[] {
-    if (this.prefixes.length === 0) {
-      return params;
-    }
-    if (typeof params[0] === 'string') {
-      const [firstParam, ...restParams] = params;
-      return [`${this.prefixString} ${firstParam}`, ...restParams];
-    }
-    return [this.prefixString, ...params];
+  debug(...params: unknown[]): void {
+    if (this.mutedMethods.has('debug')) return;
+    this.pino.debug(format(...params));
+  }
+
+  info(...params: unknown[]): void {
+    if (this.mutedMethods.has('info')) return;
+    this.pino.info(format(...params));
+  }
+
+  // pino has no 'log' level; map it onto 'info', matching the console-visible
+  // severity `log` and `info` shared before this migration.
+  log(...params: unknown[]): void {
+    if (this.mutedMethods.has('log')) return;
+    this.pino.info(format(...params));
+  }
+
+  warn(...params: unknown[]): void {
+    if (this.mutedMethods.has('warn')) return;
+    this.pino.warn(format(...params));
+  }
+
+  error(...params: unknown[]): void {
+    if (this.mutedMethods.has('error')) return;
+    this.pino.error(format(...params));
   }
 
   /**
    * Returns a new logger with the provided prefix(es) added to the existing prefix list
    */
   nest(nestedPrefix: string | string[]): Logger {
-    const nestedPrefixArray = Array.isArray(nestedPrefix) ? nestedPrefix : [nestedPrefix];
-    return new Logger([...this.prefixes, ...nestedPrefixArray], this.mutedMethods);
+    const nestedPrefixArray = [...this.prefixes, ...toArray(nestedPrefix)];
+    return Logger.withPino(this.pino, nestedPrefixArray, this.mutedMethods);
   }
 
   /**
    * Returns a new logger with only the provided methods muted
    */
   muteMethods(mutedMethods: LogMethod[]): Logger {
-    return new Logger(this.prefixes, mutedMethods);
+    return Logger.withPino(this.pino, this.prefixes, new Set(mutedMethods));
   }
 }

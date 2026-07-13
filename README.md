@@ -34,12 +34,34 @@ i18next never need to install those peer dependencies.
 
 ### `@wentthefox-org/discord-bot-framework/logger`
 
+Backed by [pino](https://getpino.io). Plain `new Logger(prefix)` /
+`Logger.fromShardInfo(...)` stay simple, console-only, worker-thread-free
+constructors:
+
 ```ts
 import { Logger, NestableLogger, DevNullLogger } from '@wentthefox-org/discord-bot-framework/logger';
 
 const logger = new Logger('Bot');
 const interactionLogger = logger.nest(`Interaction#${interaction.id}`);
 const shardLogger = Logger.fromShardInfo(process.env.SHARDS);
+```
+
+To additionally fan logs out to a Discord webhook (in batches, respecting
+Discord's per-webhook rate limits), use `createLogger` instead — it builds one
+pino instance with the requested transport targets (console + optional
+webhook), and `nest()` on the result shares that same instance rather than
+spawning a new worker thread per call:
+
+```ts
+import { createLogger } from '@wentthefox-org/discord-bot-framework/logger';
+
+const logger = createLogger({
+  prefix: 'Bot',
+  discordWebhook: {
+    url: env.LOG_WEBHOOK_URL,
+    level: 'warn', // only warn/error/fatal are sent to Discord; default 'warn'
+  },
+});
 ```
 
 ### `@wentthefox-org/discord-bot-framework/env`
