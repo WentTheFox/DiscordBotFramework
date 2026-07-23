@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v1.0.0...v1.1.0) (2026-07-23)
+
+
+### Features
+
+* **dev:** add createHandlerWatcher for command/interaction handler hot-reload ([fec8da9](https://github.com/WentTheFox/DiscordBotFramework/commit/fec8da9e3c8239efe91e0dbc5aea48a5178d8cdf))
+
 # [1.0.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v0.3.0...v1.0.0) (2026-07-13)
 
 
