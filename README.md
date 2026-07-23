@@ -249,6 +249,45 @@ output, not `src/`. Gate it behind your own dev-only flag (e.g. a `DEV_WATCH`
 env var via `boolFromString()`) — this package intentionally has no built-in
 concept of a dev/prod mode.
 
+**Combining with `createShardManager`:** the example above assumes the
+process calling `createHandlerWatcher` is also the one holding the
+registries — true for `createBotClient` bots, and true for a
+`createShardManager` bot's *shard* process (the file at `botScriptPath`),
+**not** the top-level process that calls `createShardManager` itself. Put the
+`if (env.DEV_WATCH) { ... }` block in the shard script, after the client is
+created, not in the file that spawns the `ShardingManager`.
+
+If you skip `tsc --watch` and instead run the shard script directly from
+source (`tsx`/`ts-node`/similar) to avoid a separate compile step, two things
+that are easy to get wrong:
+
+- `botScriptPath` must point at the actual file being executed (e.g. `bot.ts`),
+  not a `build/`-compiled path that was never written.
+- discord.js's `ShardingManager` does **not** inherit the parent process's
+  CLI flags for spawned shards — both `'process'` (`child_process.fork`) and
+  `'worker'` (`worker_threads.Worker`) modes are given an explicit
+  `execArgv: []` unless you pass your own `execArgv` to `createShardManager`.
+  If the parent process is only able to run TypeScript because of loader
+  flags injected by a tool like `tsx` (visible in `process.execArgv`), those
+  flags are silently dropped for every shard unless you forward them
+  yourself — the shard process/thread then fails to load a `.ts` entry file
+  at all. Forward them explicitly:
+
+  ```ts
+  const isTsDevMode = process.env.npm_lifecycle_script?.includes('.ts') ?? false;
+  await createShardManager({
+    token, logger,
+    botScriptPath: `${currentFolder}/bot.${isTsDevMode ? 'ts' : 'js'}`,
+    mode: isTsDevMode ? 'worker' : 'process',
+    execArgv: isTsDevMode ? process.execArgv : undefined,
+    beforeSpawn: () => startupCommandsUpdate(logger),
+  });
+  ```
+
+  This has no effect on watched paths: `createHandlerWatcher`'s `filter`
+  option still needs updating to match `.ts` instead of the default
+  `.js`/`.mjs`/`.cjs`, since there's no `build/` output to watch in this mode.
+
 ### `@wentthefox-org/discord-bot-framework/utils`
 
 `runAttempts`, `getGitData`, `queueLazyPromises`, `condenseStringArray`,
