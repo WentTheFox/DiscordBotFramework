@@ -44,6 +44,10 @@
       "types": "./build/client/index.d.ts",
       "default": "./build/client/index.js"
     },
+    "./dev": {
+      "types": "./build/dev/index.d.ts",
+      "default": "./build/dev/index.js"
+    },
     "./utils": {
       "types": "./build/utils/index.d.ts",
       "default": "./build/utils/index.js"

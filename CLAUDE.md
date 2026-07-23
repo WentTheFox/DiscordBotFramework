@@ -138,6 +138,40 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   command's nested `.modal` map so the existing `dispatchModal` (unchanged)
   can consume it directly — don't add modal-specific branching to
   `dispatch.ts` itself.
+- **`src/dev/create-handler-watcher.ts` is a thin generic file-watching
+  primitive, not a reload-and-merge framework.** `createHandlerWatcher` only
+  watches paths, debounces/coalesces fs events per file (default 250ms,
+  `Map<string, Timeout>` keyed by resolved path), invokes your `onChange`
+  callback, and catches/logs anything it throws so a bad reload can never
+  crash the process. It deliberately does *not* know how to re-`import()` a
+  module, derive a registry key from a file path, or write into
+  `registry.byName` — that stays bot-side (shown only as a README recipe),
+  mirroring why `flattenCommandModals`/component registries stay thin
+  adapters instead of forcing one shape onto genuinely different bot layouts.
+  This is only possible at all because `dispatch.ts`'s `dispatch*` functions
+  and `createInteractionRouter` already do a **live** `registry.byName[key]`
+  property lookup on every interaction, with no closure-caching — mutating a
+  registry's `byName` entry in place is picked up on the very next
+  interaction, no additional wiring needed. Built on native
+  `fs.watch(dir, { recursive: true })`, not chokidar or any other watcher
+  dependency — Node 24 (this package's floor) has had stable cross-platform
+  recursive watch support since Node 20.4, and the repo's standing preference
+  is to avoid a new dependency when a native API suffices (same reasoning as
+  the homegrown Discord-webhook pino transport). **The
+  registration/full-restart boundary is permanent and deliberate, not a TODO
+  to close later**: conflating hot-reload with Discord command registration
+  would mean either polling Discord's API on every file change or maintaining
+  a shadow model of "what's currently registered" — both unnecessary
+  complexity for a dev-only convenience feature. A command's `getDefinition()`
+  (name/description/options schema) changing, or a brand-new command file not
+  already present in the registry at process startup, always needs
+  `createCommandRegistrar` plus a restart — `createHandlerWatcher` never tries
+  to cover either case. **`./dev` is excluded from root `src/index.ts` for a
+  different reason than `./db`/`./i18n`**: those two are peer-dependency-gated
+  (bots without Postgres/i18next shouldn't need the peer deps installed);
+  `./dev` has no peer dependencies at all; it's excluded purely because
+  dev-only tooling shouldn't leak into every consumer's root import surface.
+  Don't conflate the two exclusions as the same rationale.
 - **`src/logger/` is backed by pino, not raw `console.*`**, chosen over winston for
   wider adoption and because pino's `.child()`/transport-worker model maps cleanly
   onto this module's existing `nest()` semantics. Discord-webhook log delivery is a
@@ -204,6 +238,7 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 | `src/utils/discord-lookups.ts`, `messaging.ts`, `promises.ts`, `strings.ts` | `PennyCurve/src/utils/client-utils.ts` + `messaging.ts` + `promises.ts` + `strings.ts` |
 | `src/db/create-postgres-prisma-db.ts` | `Fantastick/src/utils/create-db.ts` + `prisma.config.ts` pattern |
 | `src/i18n/create-i18n-initializer.ts` | `HammerTimeBot/src/constants/locales.ts` `initI18next` |
+| `src/dev/create-handler-watcher.ts` | New for this package, no direct bot precedent (none of the three source bots had hot-reload) |
 
 ## Conventions
 

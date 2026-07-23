@@ -28,9 +28,12 @@ if you import `@wentthefox-org/discord-bot-framework/db` or `/i18n`.
 
 ## Subpaths
 
-Everything is available from the package root **except** `./db` and `./i18n`,
-which are kept as separate subpaths so bots that don't use Postgres/Prisma or
-i18next never need to install those peer dependencies.
+Everything is available from the package root **except** `./db`, `./i18n`, and
+`./dev`. `./db`/`./i18n` are kept as separate subpaths so bots that don't use
+Postgres/Prisma or i18next never need to install those peer dependencies.
+`./dev` is excluded for a different reason — it has no extra peer
+dependencies, but it's dev-only tooling that shouldn't leak into every
+consumer's root import surface.
 
 ### `@wentthefox-org/discord-bot-framework/logger`
 
@@ -191,6 +194,60 @@ const manager = await createShardManager({
   beforeSpawn: () => startupCommandsUpdate(logger),
 });
 ```
+
+### `@wentthefox-org/discord-bot-framework/dev`
+
+Live-reloads compiled command/interaction handler *implementations* during
+local development, without restarting the process or re-registering commands
+with Discord for every code change. `createHandlerWatcher` is a small,
+dependency-free primitive built on native `fs.watch` — it only watches paths,
+debounces/coalesces filesystem events per file, and invokes your `onChange`
+callback (catching and logging anything it throws so a bad reload never
+crashes the bot). It deliberately does not know how to re-import a module or
+merge it into a registry, since that depends on each bot's own file layout:
+
+```ts
+import { createHandlerWatcher } from '@wentthefox-org/discord-bot-framework/dev';
+import { pathToFileURL } from 'node:url';
+import { basename, extname } from 'node:path';
+
+if (env.DEV_WATCH) {
+  const watcher = createHandlerWatcher({
+    paths: ['./build/commands'],
+    logger,
+    onChange: async (filePath) => {
+      const commandName = basename(filePath, extname(filePath));
+      if (!chatInputCommandRegistry.isKnown(commandName)) return;
+      // The `?t=` query busts Node's ESM module cache, which keys on the
+      // resolved URL — deriving the registry key and writing it back into
+      // `byName` is bot-side glue, not something this package standardizes.
+      const fresh = await import(`${pathToFileURL(filePath).href}?t=${Date.now()}`);
+      chatInputCommandRegistry.byName[commandName] = fresh.default;
+      logger.log(`Reloaded command handler: ${commandName}`);
+    },
+  });
+
+  process.on('SIGINT', () => {
+    watcher.close();
+    process.exit(0);
+  });
+}
+```
+
+This works because `dispatch*`/`createInteractionRouter` always read
+`registry.byName[key]` live on every interaction — mutating an entry in place
+is picked up on the very next interaction with no other wiring.
+
+**Limitations:** this only reloads handler implementations already sitting in
+a registry's `byName`. It does **not** re-run command registration — changing
+a command's `getDefinition()` (name, description, options schema) still
+requires `createCommandRegistrar` and a full process restart, and a brand-new
+command file that wasn't in the registry at startup isn't picked up without
+one either. It also assumes a parallel `tsc --watch` (or equivalent) process
+is running, since this package has no bundler and watches compiled `build/`
+output, not `src/`. Gate it behind your own dev-only flag (e.g. a `DEV_WATCH`
+env var via `boolFromString()`) — this package intentionally has no built-in
+concept of a dev/prod mode.
 
 ### `@wentthefox-org/discord-bot-framework/utils`
 
