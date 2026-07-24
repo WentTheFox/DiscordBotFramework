@@ -1,3 +1,22 @@
+# [2.0.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v1.2.0...v2.0.0) (2026-07-24)
+
+
+* feat(commands)!: replace getDefinition() with a validated commands.json file ([060a812](https://github.com/WentTheFox/DiscordBotFramework/commit/060a812663efc98456ca98cb2bb27c71ccdfed0f))
+
+
+### BREAKING CHANGES
+
+* BotChatInputCommand/BotContextMenuCommand no longer accept
+getDefinition. buildApplicationCommandsBody's signature changes to
+(commandsFile, registries, options) and now requires every command to have
+a corresponding commands.json entry. Bots must author a commands.json file
+(with their own composed JSON Schema for validation) and pass it to
+buildApplicationCommandsBody instead of defining commands inline via
+getDefinition(). fixedReplyCommandFactory drops its name/description
+parameters.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+
 # [1.2.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v1.1.0...v1.2.0) (2026-07-24)
 
 
