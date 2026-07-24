@@ -120,16 +120,179 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   parameters — no hand-written enum needed, full typo/exhaustiveness safety
   preserved. `Registry.byName` is exactly the `Record<string, T>` shape
   `dispatch.ts`/`router.ts` already accepted, so those files needed **zero**
-  changes for this. `buildApplicationCommandsBody`
-  (`src/commands/build-application-commands-body.ts`) is the matching piece
-  for command *registration*: it flattens one or more registries into the
-  flat JSON body `createCommandRegistrar` expects, always overwrites
-  `getDefinition()`'s own `name` with the registry key (registry wins, not
-  `getDefinition`), and auto-applies a stable required-options-first sort
-  (recursing into subcommand/subcommand-group options) rather than throwing
-  if a bot got the ordering wrong — Discord's own rejection in that case is
-  ambiguous, so silently fixing it is strictly better than surfacing a
-  confusing API error.
+  changes for this or for the `commands.json` redesign below.
+- **`getDefinition()` was removed entirely (semver-major) in favor of one
+  `commands.json` file per bot as the single source of truth for a command's
+  wire definition** (name, description, options, permissions) — no dual-path
+  with the old per-command `getDefinition(t?)` function. `BotChatInputCommand`/
+  `BotContextMenuCommand` (`src/interactions/types.ts`) are now pure handler
+  shapes (`{ registerCondition?, handle, autocomplete?, modal? }`), with no
+  `T`/definition-arg generic at all. The old design let a command's
+  registered definition and its handler drift apart silently — nothing
+  linked "the JSON Discord sees" to "the handler that runs" except both
+  living in the same TS object; a bot could hand-edit one and forget the
+  other. The `commands.json` file plus `buildApplicationCommandsBody`'s
+  two-directional cross-check (below) makes that link a hard runtime check
+  instead, at the cost of the old single-function convenience.
+- **`commands.json` is a flat array mirroring Discord's bulk-overwrite PUT
+  body exactly** (covering CHAT_INPUT/USER/MESSAGE in one array, matching how
+  `createCommandRegistrar`'s `updateGlobalCommands`/`updateGuildCommands`
+  already accept one flat array), validated by a JSON Schema **before** ever
+  calling Discord's API. This package ships only the generic, reusable
+  fragments (`src/commands/schema/*.schema.ts`, mirroring
+  `discord-api-types`' command/option shapes) — it does not dictate one
+  rigid schema for a bot's whole file. Each bot composes its own full
+  `commands.schema.json` on top via `$ref`/`allOf` (e.g. narrowing `name` to
+  an enum of its actual commands), calling `registerFrameworkSchemas(ajv)`
+  first so those `$ref`s resolve. Base fragments use
+  `additionalProperties: false` for strictness (matches every real bot's
+  current usage — no source bot needs extra top-level per-command fields
+  today); a bot needing a genuinely new top-level field per entry will need
+  `unevaluatedProperties`-based composition instead of `allOf`, since
+  `additionalProperties: false` only evaluates a schema's own declared
+  properties, not fields declared on sibling `allOf` members — not built
+  preemptively.
+- **Discord's option nesting is modeled as three separate, non-recursive
+  fragments (leaf option / subcommand / subcommand-group), not one
+  self-referential schema.** Discord's real nesting is a fixed depth (at
+  most subcommand-group → subcommand → leaf option), so this was never
+  actually "recursive" — but a naive `application-command-option.schema.ts`
+  that `$ref`'d itself hit `json-schema-to-ts`'s `FromSchema` circularly
+  referencing itself (`TS2615`), confirmed via a throwaway spike before
+  committing to the real schema shape. Unrolling the fixed depth into three
+  flat fragments (`application-command-leaf-option`/`-subcommand`/
+  `-subcommand-group`) sidesteps this entirely, since none of them actually
+  self-reference. Each leaf-option branch is **flat** (no `allOf`-composed
+  shared base with `name`/`description`) for a related reason: the same
+  spike found that `additionalProperties: false` inside an `allOf` branch
+  only evaluates *that branch's own* declared properties, so a `name` field
+  declared on a sibling `allOf` member gets rejected as "additional" and the
+  derived type collapses to `never` — every branch inlines its own
+  `name`/`description`/`type`/`required` instead of sharing them via `allOf`.
+- **JSON Schema fragments are authored as `.ts` modules (`as const`), not
+  raw `.json` files, even though real `.json` mirrors are shipped and are
+  what "generic schema, other tools can consume it" actually refers to.**
+  Verified across every `module`/`moduleResolution` combination that
+  TypeScript's `resolveJsonModule` always widens imported JSON string values
+  to `string` (never to a literal like `"object"`) — this isn't a config bug,
+  `json-schema-to-ts`'s `FromSchema` fundamentally cannot consume a real
+  `.json` import for that reason. `scripts/generate-schema-json.mjs` runs
+  after `tsc` in the `build` script, importing each compiled
+  `*.schema.js` and writing a matching `*.schema.json` next to it — those
+  generated files are the ones that ship in the npm package and that
+  external non-TS tools reference by `$id`; the `.ts` files are the only
+  hand-edited source, used for both ajv validation and `FromSchema` type
+  derivation.
+- **`CommandsFile` (the whole-file array type) is composed from the already-
+  derived per-entry types (`readonly CommandFileEntry[]`) rather than a
+  second `FromSchema<typeof commandsFileSchema, ...>` call.** Deriving the
+  whole-array type by re-walking the same deeply-nested option `oneOf`
+  structure one level up hit TS's type-instantiation depth limit (`TS2589:
+  excessively deep`), even after trimming each `FromSchema` call's
+  `references` array to the minimal transitive set each schema actually
+  needs (which was still necessary and kept for the per-entry types).
+  `commandsFileSchema` remains the runtime source of truth for ajv
+  validation regardless — only its *type* derivation takes this shortcut.
+- **`description` (command- and option-level) is optional in
+  `commands.json`; `name` is not.** A description may be authored directly
+  in the file, or resolved at submission time via
+  `buildApplicationCommandsBody`'s `resolveDescription` hook (typically
+  `createCommandLocalizer(...).resolveDescription`, keyed by i18next path).
+  If a command/option still has no description after both are tried,
+  `buildApplicationCommandsBody` throws — collecting every offender into one
+  error, never sending an incomplete body to Discord's API. This is a
+  two-pass validation split: `parseCommandsFile`'s ajv pass runs immediately
+  after parsing and only checks structure (it can't know about descriptions
+  that are legitimately pending i18n resolution); the description-
+  completeness check runs later, inside `buildApplicationCommandsBody`,
+  after the localize hook has had a chance to fill things in.
+  `*_localizations` are never hand-authored in `commands.json` at all — only
+  `resolveDescription` (a single fallback string) plus the separate
+  `localizeNames`/`localizeDescriptions` hooks (dictionary-producing, one
+  Discord field each) exist, deliberately three hooks rather than one
+  combined object, since `description` and `*_localizations` are genuinely
+  different Discord fields. **All three hooks apply at both the command
+  level and, recursively, at every option level** (`localizeNames`/
+  `localizeDescriptions` are called per-option too, not just once per
+  command) — an initial implementation only called them at the command
+  level, which a real full migration of Fantastick (see below) caught
+  immediately: Fantastick's original `getCommonOptionMeta` localized every
+  option's `name`/`description` individually, and losing that during the
+  migration would have been a silent regression (options falling back to
+  their raw English name/description in every non-default locale).
+- **`buildApplicationCommandsBody`'s two-directional cross-check (a
+  `commands.json` entry with no matching handler, or a handler with no
+  matching `commands.json` entry) both throw, collected into the same
+  combined error as the missing-description check.** Both are almost always
+  authoring mistakes — a file entry with no handler means Discord would
+  accept interactions for a command the bot can't actually handle
+  (`dispatch.ts`'s "Unknown command" error, for real users, at runtime); a
+  handler with no file entry can never be registered or reached at all.
+  Deliberately strict, matching this repo's existing preference (see the
+  required-options-first sort below) for catching bugs before Discord's API
+  ever sees them, rather than surfacing a confusing rejection later.
+  `buildApplicationCommandsBody` now iterates `commandsFile` to drive output
+  order (not registry insertion order), since the file — not import order of
+  handler modules — is the thing a bot author actually controls the
+  ordering of.
+- **`createCommandLocalizer` (`src/i18n/create-command-localizer.ts`)
+  generalizes Fantastick's bespoke `getLocalizedObject`/`getCommonOptionMeta`
+  helpers into a framework-owned utility**, replacing the need for every bot
+  to hand-roll its own i18next-to-Discord-localization glue. Its three
+  methods (`resolveDescription`/`localizeName`/`localizeDescription`) take
+  the exact same dot-path-shaped key array
+  `buildApplicationCommandsBody` builds internally, so they can be passed
+  straight through as its three hook options with zero glue code.
+  Missing-key detection relies on i18next echoing the lookup key back
+  unchanged when no translation exists (no `returnNull`/
+  `parseMissingKeyHandler` configured) — the only signal available with a
+  plain `TFunction`. Each lookup explicitly passes `fallbackLng: false`;
+  without it, a bot's own configured i18next fallback chain would silently
+  fill in every locale from the fallback language, and
+  `localizeName`/`localizeDescription` could never produce a genuinely
+  sparse per-locale dictionary (fallback-filled text isn't wrong to send,
+  but it defeats "only emit a locale entry when that locale has its own
+  translation").
+  Nested-option localization key path convention (one level, for options
+  nested under a subcommand:
+  `commands.<name>.options.<subcommandName>.options.<optionName>.description`)
+  has no real-world precedent — Fantastick has no subcommands today — so
+  treat it as provisional until validated against a bot that actually uses
+  subcommands.
+- **Always `import { Ajv } from 'ajv'` (named import), never `import Ajv from
+  'ajv'` (default import), anywhere in this package or its docs.** Ajv's
+  `.d.ts` declares a genuine ESM `export default Ajv`, but under this
+  package's `moduleResolution: NodeNext` + `esModuleInterop: true`, a
+  default-import value use of a CJS package (ajv ships as CJS at runtime
+  despite its ESM-shaped types) type-checks as `typeof import(...)` — the
+  whole module namespace, not the class — and fails with `TS2351: This
+  expression is not constructable.` `Ajv` is also exported as a **named**
+  export (`export declare class Ajv extends AjvCore`), which sidesteps the
+  interop ambiguity entirely and is what actually compiles. This was missed
+  initially because `tsconfig.json` excludes `*.test.ts` from `tsc`, so the
+  bug sat undetected in `parse-commands-file.test.ts`/`compose-example.test.ts`
+  (only ever run through Vitest's more lenient transform) until real usage
+  in a full Fantastick migration (a plain production `.ts` file, not a test)
+  hit it under actual `tsc --noEmit`.
+- **The `commands.json` redesign was validated with a full, real migration
+  of Fantastick** (not just this package's own unit tests) before being
+  committed here — every one of Fantastick's 16 chat-input + 2 context-menu
+  commands was converted to `commands.json` + a composed schema, wired
+  through `createCommandLocalizer` against Fantastick's real i18next locale
+  files, and proven end-to-end with a runtime test asserting the exact
+  resolved English/Hungarian text and localizations dictionaries — not just
+  that it type-checks. This is what caught both the ajv named-import bug and
+  the missing option-level localization bug above; both were fixed here
+  before Fantastick's migration branch was finalized. Fantastick's original
+  code aliased `nsfw-sticker`/`nsfw-pack`'s option translations onto
+  `sticker`/`pack`'s i18next keys (via a hardcoded command-name argument to
+  `getCommonOptionMeta`, regardless of which command was actually being
+  built) — the new per-entry path convention has no equivalent aliasing
+  mechanism, so the migration added `nsfw-sticker`/`nsfw-pack` their own
+  `options` keys (copied from `sticker`/`pack`) to Fantastick's locale files
+  rather than the framework growing an aliasing feature for what was, on
+  inspection, an isolated case of two commands sharing an identical options
+  shape.
 - **Modal dispatch stays a thin adapter, not a first-class registry
   concept**, because Fantastick's real shape nests a `.modal: Record<ModalId,
   ModalHandler<Ctx>>` map on the *owning chat-input command* rather than
@@ -269,7 +432,9 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 | `src/commands/registration.ts` | `HammerTimeBot/src/utils/update-guild-commands.ts` |
 | `src/commands/fixed-reply-command-factory.ts` | `PennyCurve/src/utils/fixed-reply-command-factory.ts` |
 | `src/interactions/registry.ts` | Generalized from all three bots' hand-written `const enum` + `Record<Enum, T>` aggregator map pattern |
-| `src/commands/build-application-commands-body.ts` | `HammerTimeBot/src/utils/get-application-commands.ts` |
+| `src/commands/build-application-commands-body.ts` | `HammerTimeBot/src/utils/get-application-commands.ts`; reworked to consume a validated `commands.json` array + handler registries instead of each command's own `getDefinition()` |
+| `src/commands/schema/` | New for this package, no direct bot precedent (none of the three source bots had a JSON-Schema-validated commands file) |
+| `src/i18n/create-command-localizer.ts` | Generalized from `Fantastick/src/utils/get-localized-object.ts` + `get-common-option-meta.ts` |
 | `src/client/create-bot-client.ts` | `PennyCurve/src/create-client.ts` (unsharded shape) |
 | `src/client/create-shard-manager.ts` | `HammerTimeBot/src/index.ts` + `Fantastick/src/index.ts` (near-identical `ShardingManager` setup) |
 | `src/utils/run-attempts.ts` | `Fantastick/src/utils/run-attempts.ts` (verbatim) |
@@ -356,3 +521,21 @@ of `HammerTimeBot`'s Claude Code plan file, but the short version:
 - Both will need their own `env.ts` rewritten onto `defineEnv` — check for
   vestigial/unused env keys while doing so (PennyCurve has at least one:
   `SUSPICIOUS_NAMES`) rather than porting them forward silently.
+- Fantastick has already been fully migrated onto the `commands.json`
+  redesign, on a `feat/commands-json-migration` branch in its own repo
+  (uncommitted to `main` there as of this writing — a validation/prep branch,
+  not yet a real PR, since it depends on this package's unreleased major
+  version) — this is what the JSON-Schema-fragment composition model,
+  `createCommandLocalizer`, and the two-directional cross-check were
+  actually validated against, not just this package's own unit tests. What
+  it did **not** end up validating: Fantastick's option-metadata fragments
+  (`min_length`/`max_length` constants shared between a slash-command option
+  and its modal's `TextInput` component) turned out to be a non-issue for
+  the JSON-Schema fragment/`$def` composition story specifically, because
+  `commands.json` is plain data, not a place any of Fantastick's own code
+  needed a `$def`-level share — the existing `src/options/metadata/*.ts` TS
+  constants already served double duty (both the raw numbers copied into
+  `commands.json` by hand and the modal's `TextInput` min/max) with no
+  framework involvement needed. If a future bot's schema *composition*
+  itself (not just the underlying numbers) needs to share a fragment across
+  multiple option definitions, that's still unvalidated.

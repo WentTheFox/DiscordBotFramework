@@ -2,7 +2,7 @@
   "name": "@went.tf/discord-bot-framework",
   "version": "1.2.0",
   "description": "Shared framework for building Discord bots with discord.js: logging, env validation, interaction dispatch, API client, and optional Postgres/i18next helpers",
-  "author": "WentTheFox",
+  "author": "WentTheFox <mail@went.tf> (https://github.com/WentTheFox)",
   "license": "MIT",
   "type": "module",
   "publishConfig": {
@@ -40,6 +40,10 @@
       "types": "./build/commands/index.d.ts",
       "default": "./build/commands/index.js"
     },
+    "./commands/schema": {
+      "types": "./build/commands/schema/index.d.ts",
+      "default": "./build/commands/schema/index.js"
+    },
     "./client": {
       "types": "./build/client/index.d.ts",
       "default": "./build/client/index.js"
@@ -65,13 +69,14 @@
     "prepare": "husky",
     "lint": "eslint \"src/**/*.ts\"",
     "lint:fix": "pnpm run lint -- --fix",
-    "build": "tsc",
+    "build": "tsc && node scripts/generate-schema-json.mjs",
     "build:clean": "rimraf build",
     "prepublishOnly": "pnpm run build:clean && pnpm run build",
     "test": "vitest",
     "test:watch": "vitest --watch"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "dotenv": "^17.2.3",
     "pino": "^10.3.1",
     "pino-abstract-transport": "^3.0.0",
@@ -126,6 +131,7 @@
     "husky": "^9.1.7",
     "i18next": "^25.8.6",
     "i18next-fs-backend": "^2.6.1",
+    "json-schema-to-ts": "^3.1.1",
     "rimraf": "^6.0.1",
     "semantic-release": "^25.0.5",
     "typescript": "~5.9.3",

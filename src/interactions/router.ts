@@ -15,11 +15,11 @@ import {
   BotModal,
 } from './types.js';
 
-export interface InteractionRouterConfig<Ctx extends BaseInteractionContext, T = unknown> {
-  commands: Record<string, BotChatInputCommand<Ctx, T>>;
+export interface InteractionRouterConfig<Ctx extends BaseInteractionContext> {
+  commands: Record<string, BotChatInputCommand<Ctx>>;
   components?: Record<string, BotMessageComponent<Ctx>>;
   modals?: Record<string, BotModal<Ctx>>;
-  contextMenuCommands?: Record<string, BotContextMenuCommand<Ctx, T>>;
+  contextMenuCommands?: Record<string, BotContextMenuCommand<Ctx>>;
   customIdSeparator?: string;
   /**
    * Builds (or enriches) the per-interaction context. Runs before dispatch on
@@ -39,7 +39,7 @@ export interface InteractionRouterConfig<Ctx extends BaseInteractionContext, T =
  * successfully) can call the individual `dispatch*` functions directly
  * instead of this convenience wrapper.
  */
-export function createInteractionRouter<Ctx extends BaseInteractionContext, T = unknown>(config: InteractionRouterConfig<Ctx, T>) {
+export function createInteractionRouter<Ctx extends BaseInteractionContext>(config: InteractionRouterConfig<Ctx>) {
   return async (interaction: Interaction, baseContext: Ctx): Promise<void> => {
     const context = await config.buildContext(interaction, baseContext);
 

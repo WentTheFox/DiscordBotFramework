@@ -3,8 +3,6 @@ import {
   ChatInputCommandInteraction,
   MessageComponentInteraction,
   ModalSubmitInteraction,
-  RESTPostAPIChatInputApplicationCommandsJSONBody,
-  RESTPostAPIContextMenuApplicationCommandsJSONBody,
   UserContextMenuCommandInteraction,
   MessageContextMenuCommandInteraction,
 } from 'discord.js';
@@ -18,10 +16,14 @@ export type ComponentHandler<Ctx> = (interaction: MessageComponentInteraction, c
 export type ModalHandler<Ctx> = (interaction: ModalSubmitInteraction, context: Ctx, resourceId?: string) => void | Promise<void>;
 export type ContextMenuHandler<Ctx> = (interaction: UserContextMenuCommandInteraction | MessageContextMenuCommandInteraction, context: Ctx) => void | Promise<void>;
 
-export interface BotChatInputCommand<Ctx, T = unknown> {
+/**
+ * A command's wire definition (name, description, options, permissions) lives
+ * in the bot's commands.json file, not here - see `./schema` and
+ * `buildApplicationCommandsBody`. This is purely the handler side.
+ */
+export interface BotChatInputCommand<Ctx> {
   /** When present, the command is only included in registration output if this returns true. */
   registerCondition?: () => boolean;
-  getDefinition: (t?: T) => RESTPostAPIChatInputApplicationCommandsJSONBody;
   handle: CommandHandler<Ctx>;
   /** Keyed by the autocompleted option's name. */
   autocomplete?: Record<string, AutocompleteHandler<Ctx>>;
@@ -37,9 +39,9 @@ export interface BotModal<Ctx> {
   handle: ModalHandler<Ctx>;
 }
 
-export interface BotContextMenuCommand<Ctx, T = unknown> {
+/** A context-menu command's wire definition lives in the bot's commands.json file - see `./schema`. */
+export interface BotContextMenuCommand<Ctx> {
   /** When present, the command is only included in registration output if this returns true. */
   registerCondition?: () => boolean;
-  getDefinition: (t?: T) => RESTPostAPIContextMenuApplicationCommandsJSONBody;
   handle: ContextMenuHandler<Ctx>;
 }

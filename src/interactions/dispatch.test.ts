@@ -10,7 +10,7 @@ describe('dispatchChatInputCommand', () => {
   it('invokes the matching command handler', async () => {
     const handle = vi.fn();
     const commands: Record<string, BotChatInputCommand<typeof context>> = {
-      ping: { getDefinition: () => ({ name: 'ping', description: 'ping' }), handle },
+      ping: { handle },
     };
     const interaction = { commandName: 'ping' } as unknown as ChatInputCommandInteraction;
 
@@ -23,7 +23,6 @@ describe('dispatchChatInputCommand', () => {
     const onError = vi.fn();
     const commands: Record<string, BotChatInputCommand<typeof context>> = {
       boom: {
-        getDefinition: () => ({ name: 'boom', description: 'boom' }),
         handle: () => {
           throw new Error('nope');
         },

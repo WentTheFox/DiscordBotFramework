@@ -15,8 +15,8 @@ type Ctx = typeof context;
 
 describe('createChatInputCommandRegistry', () => {
   it('builds byName/names/isKnown from an array of named commands', () => {
-    const ping: NamedChatInputCommand<Ctx, 'ping'> = { name: 'ping', getDefinition: () => ({ name: 'ping', description: 'ping' }), handle: vi.fn() };
-    const pong: NamedChatInputCommand<Ctx, 'pong'> = { name: 'pong', getDefinition: () => ({ name: 'pong', description: 'pong' }), handle: vi.fn() };
+    const ping: NamedChatInputCommand<Ctx, 'ping'> = { name: 'ping', handle: vi.fn() };
+    const pong: NamedChatInputCommand<Ctx, 'pong'> = { name: 'pong', handle: vi.fn() };
 
     const registry = createChatInputCommandRegistry([ping, pong]);
 
@@ -30,8 +30,8 @@ describe('createChatInputCommandRegistry', () => {
   });
 
   it('throws on duplicate names', () => {
-    const a: NamedChatInputCommand<Ctx, 'dup'> = { name: 'dup', getDefinition: () => ({ name: 'dup', description: 'a' }), handle: vi.fn() };
-    const b: NamedChatInputCommand<Ctx, 'dup'> = { name: 'dup', getDefinition: () => ({ name: 'dup', description: 'b' }), handle: vi.fn() };
+    const a: NamedChatInputCommand<Ctx, 'dup'> = { name: 'dup', handle: vi.fn() };
+    const b: NamedChatInputCommand<Ctx, 'dup'> = { name: 'dup', handle: vi.fn() };
 
     expect(() => createChatInputCommandRegistry([a, b])).toThrow(/Duplicate registry key "dup"/);
   });
@@ -40,7 +40,7 @@ describe('createChatInputCommandRegistry', () => {
 describe('createContextMenuCommandRegistry', () => {
   it('keys by name', () => {
     const registry = createContextMenuCommandRegistry([
-      { name: 'Report', getDefinition: () => ({ name: 'Report', type: 3 as never }), handle: vi.fn() },
+      { name: 'Report', handle: vi.fn() },
     ]);
     expect(registry.isKnown('Report')).toBe(true);
   });
@@ -74,19 +74,16 @@ describe('flattenCommandModals', () => {
     const chatInputRegistry = createChatInputCommandRegistry([
       {
         name: 'create-sticker',
-        getDefinition: () => ({ name: 'create-sticker', description: 'create' }),
         handle: vi.fn(),
         modal: { 'create-sticker-modal': createStickerModalHandle },
       },
       {
         name: 'delete-sticker',
-        getDefinition: () => ({ name: 'delete-sticker', description: 'delete' }),
         handle: vi.fn(),
         modal: { 'delete-sticker-modal': deleteStickerModalHandle },
       },
       {
         name: 'ping',
-        getDefinition: () => ({ name: 'ping', description: 'ping' }),
         handle: vi.fn(),
       },
     ]);
@@ -104,7 +101,7 @@ describe('flattenCommandModals', () => {
 
   it('produces an empty registry when no commands declare modals', () => {
     const chatInputRegistry = createChatInputCommandRegistry([
-      { name: 'ping', getDefinition: () => ({ name: 'ping', description: 'ping' }), handle: vi.fn() },
+      { name: 'ping', handle: vi.fn() },
     ]);
 
     const modals = flattenCommandModals(chatInputRegistry);

@@ -6,11 +6,11 @@ import {
   BotModal,
 } from './types.js';
 
-export type NamedChatInputCommand<Ctx extends BaseInteractionContext, Name extends string = string, T = unknown> =
-  BotChatInputCommand<Ctx, T> & { name: Name };
+export type NamedChatInputCommand<Ctx extends BaseInteractionContext, Name extends string = string> =
+  BotChatInputCommand<Ctx> & { name: Name };
 
-export type NamedContextMenuCommand<Ctx extends BaseInteractionContext, Name extends string = string, T = unknown> =
-  BotContextMenuCommand<Ctx, T> & { name: Name };
+export type NamedContextMenuCommand<Ctx extends BaseInteractionContext, Name extends string = string> =
+  BotContextMenuCommand<Ctx> & { name: Name };
 
 export type NamedComponent<Ctx extends BaseInteractionContext, Id extends string = string> =
   BotMessageComponent<Ctx> & { id: Id };
@@ -42,15 +42,15 @@ function buildRegistry<Name extends string, T>(items: readonly T[], keyOf: (item
 }
 
 export function createChatInputCommandRegistry<
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Ctx/T are only used to validate array element shape; TS can't back-infer them from a `const`-inferred array constraint, so pinning them narrows the constraint instead of widening it. Commands[number] (used below) is still the precise element type.
-  const Commands extends readonly NamedChatInputCommand<any, string, any>[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Ctx is only used to validate array element shape; TS can't back-infer it from a `const`-inferred array constraint, so pinning it narrows the constraint instead of widening it. Commands[number] (used below) is still the precise element type.
+  const Commands extends readonly NamedChatInputCommand<any, string>[],
 >(commands: Commands): Registry<Commands[number]['name'], Commands[number]> {
   return buildRegistry(commands, (c) => c.name) as Registry<Commands[number]['name'], Commands[number]>;
 }
 
 export function createContextMenuCommandRegistry<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see createChatInputCommandRegistry above
-  const Commands extends readonly NamedContextMenuCommand<any, string, any>[],
+  const Commands extends readonly NamedContextMenuCommand<any, string>[],
 >(commands: Commands): Registry<Commands[number]['name'], Commands[number]> {
   return buildRegistry(commands, (c) => c.name) as Registry<Commands[number]['name'], Commands[number]>;
 }
@@ -78,8 +78,7 @@ export function createModalRegistry<
  * owning command's `modal[modalId]`.
  */
 export function flattenCommandModals<Ctx extends BaseInteractionContext>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see createChatInputCommandRegistry above; T never affects the return type here, only Ctx does.
-  chatInputRegistry: Registry<string, NamedChatInputCommand<Ctx, string, any>>,
+  chatInputRegistry: Registry<string, NamedChatInputCommand<Ctx, string>>,
 ): Registry<string, BotModal<Ctx>> {
   const modals: NamedModal<Ctx>[] = [];
   for (const command of chatInputRegistry.names.map((name) => chatInputRegistry.byName[name])) {

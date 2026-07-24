@@ -20,11 +20,12 @@ design rationale and module-to-source mapping.
 pnpm add @went.tf/discord-bot-framework zod discord.js @discordjs/rest discord-api-types
 ```
 
-`zod` is a real dependency of this package but must also be listed by
-consumers directly (peer resolution quirk of subpath-only usage) if you use
-`defineEnv` at your own top level. `prisma`/`@prisma/client`/`@prisma/adapter-pg`
-and `i18next`/`i18next-fs-backend` are **optional** peers — only install them
-if you import `@went.tf/discord-bot-framework/db` or `/i18n`.
+`zod` and `ajv` are real dependencies of this package but must also be
+listed by consumers directly (peer resolution quirk of subpath-only usage)
+if you use `defineEnv` or compile your own commands schema at your own top
+level. `prisma`/`@prisma/client`/`@prisma/adapter-pg` and
+`i18next`/`i18next-fs-backend` are **optional** peers — only install them if
+you import `@went.tf/discord-bot-framework/db` or `/i18n`.
 
 ## Subpaths
 
@@ -112,10 +113,14 @@ params), so there's no separate enum to keep in sync, and `registry.byName`
 is a drop-in `commands`/`components`/`modals` value for
 `createInteractionRouter`/the `dispatch*` functions below.
 
+A command's *wire definition* (name, description, options, permissions) no
+longer lives on this object — it lives in your `commands.json` file, see
+`./commands` below. This object is purely the handler side:
+
 ```ts
 import { createChatInputCommandRegistry, createComponentRegistry, createInteractionRouter, handleInteractionError } from '@went.tf/discord-bot-framework/interactions';
 
-const pingCommand = { name: 'ping', getDefinition: () => ({ name: 'ping', description: 'Replies with pong' }), handle: (interaction) => interaction.reply('pong') };
+const pingCommand = { name: 'ping', handle: (interaction) => interaction.reply('pong') };
 
 const chatInputCommandRegistry = createChatInputCommandRegistry([pingCommand /* , ... */]);
 const componentRegistry = createComponentRegistry([/* ... */]);
@@ -145,28 +150,165 @@ can consume it unchanged.
 
 ### `@went.tf/discord-bot-framework/commands`
 
-```ts
-import { buildApplicationCommandsBody, createCommandRegistrar, fixedReplyCommandFactory } from '@went.tf/discord-bot-framework/commands';
+**Every command's wire definition (name, description, options, permissions)
+lives in one `commands.json` file per bot** — a flat array mirroring
+Discord's bulk-overwrite PUT body exactly, so it's directly postable to
+Discord's API as-is (translations aside, see below). This replaces the old
+per-command `getDefinition()` function: handler objects (`{ name, handle,
+autocomplete?, modal? }`) no longer describe their own wire shape at all.
 
-const registrar = createCommandRegistrar({ rest, applicationId: env.DISCORD_CLIENT_ID, logger });
+1. Author `commands.json`, validated against your own JSON Schema composed
+   over this package's generic fragments (see "JSON Schema fragments"
+   below):
 
-const commandBodies = buildApplicationCommandsBody(
-  { chatInput: chatInputCommandRegistry, contextMenu: contextMenuCommandRegistry },
-  { sharedMetadata: { integration_types: [...], contexts: [...] }, definitionArg: t },
-);
-await registrar.updateGlobalCommands(commandBodies);
+   ```json
+   [
+     { "type": 1, "name": "ping", "description": "Replies with pong" },
+     {
+       "type": 1,
+       "name": "search",
+       "description": "Search for something",
+       "options": [
+         { "type": 3, "name": "query", "description": "Query string", "required": true }
+       ]
+     }
+   ]
+   ```
 
-const pingCommand = fixedReplyCommandFactory('ping', 'Replies with pong', 'pong');
+2. Parse and validate it before doing anything else with it:
+
+   ```ts
+   import { Ajv } from 'ajv';
+   import { parseCommandsFile, registerFrameworkSchemas } from '@went.tf/discord-bot-framework/commands/schema';
+   import myCommandsSchema from './commands.schema.json' with { type: 'json' };
+   import commandsData from './commands.json' with { type: 'json' };
+
+   const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
+   registerFrameworkSchemas(ajv);
+   const validate = ajv.compile(myCommandsSchema);
+
+   const commandsFile = parseCommandsFile(commandsData, { validate });
+   ```
+
+3. Build the Discord-ready body and register it — unchanged from before,
+   just fed by `commandsFile` + your handler registries instead of
+   `getDefinition()`:
+
+   ```ts
+   import { buildApplicationCommandsBody, createCommandRegistrar, fixedReplyCommandFactory } from '@went.tf/discord-bot-framework/commands';
+
+   const registrar = createCommandRegistrar({ rest, applicationId: env.DISCORD_CLIENT_ID, logger });
+
+   const commandBodies = buildApplicationCommandsBody(
+     commandsFile,
+     { chatInput: chatInputCommandRegistry, contextMenu: contextMenuCommandRegistry },
+     { sharedMetadata: { integration_types: [...], contexts: [...] } },
+   );
+   await registrar.updateGlobalCommands(commandBodies);
+
+   const pingCommand = { name: 'ping', ...fixedReplyCommandFactory('pong') };
+   ```
+
+`buildApplicationCommandsBody` walks `commandsFile` (its order drives the
+output order, not registry insertion order), matches each entry to a handler
+by name, applies `registerCondition` filtering, merges `sharedMetadata`
+(the commands.json entry's own fields win on conflict), and stably sorts
+every options array (including nested subcommand/subcommand-group options)
+so required options precede optional ones, matching Discord's API
+requirement automatically. It also enforces two invariants **before ever
+calling Discord's API**, each collecting every offender into one thrown
+error rather than failing on the first: every `commands.json` entry must
+have a matching handler, every handler must have a matching `commands.json`
+entry, and every command/option must end up with a non-empty `description`
+(from the file directly, or via `resolveDescription` — see "Localizing
+command names/descriptions" below).
+
+`fixedReplyCommandFactory(content, ephemeral?)` now only returns `{ handle }`
+— pair it with a registry entry that supplies `name`, and a `commands.json`
+entry that supplies `name`/`description`.
+
+#### JSON Schema fragments
+
+This package ships only the **generic, reusable JSON Schema building
+blocks** mirroring `discord-api-types`' command/option shapes — it does not
+dictate one rigid schema for your whole `commands.json` file. Compose your
+own schema on top via `$ref`/`allOf`, e.g. to narrow `name` to an enum of
+your bot's actual command names:
+
+```json
+{
+  "$id": "https://schema.your-bot.example/commands-file.json",
+  "type": "array",
+  "items": {
+    "oneOf": [
+      {
+        "allOf": [
+          { "$ref": "https://schema.went.tf/discord-bot-framework/chat-input-command.json" },
+          { "properties": { "name": { "enum": ["ping", "search"] } } }
+        ]
+      },
+      { "$ref": "https://schema.went.tf/discord-bot-framework/context-menu-command.json" }
+    ]
+  }
+}
 ```
 
-`buildApplicationCommandsBody` flattens one or more command registries into
-the flat JSON body `createCommandRegistrar` expects: it applies each
-command's `registerCondition` filter, merges `sharedMetadata` into every
-`getDefinition()` result (the command's own fields win, except `name`, which
-always comes from the registry key — command authors never need to repeat
-`name` inside `getDefinition`'s return), and stably sorts every options array
-(including nested subcommand/subcommand-group options) so required options
-precede optional ones, matching Discord's API requirement automatically.
+Call `registerFrameworkSchemas(ajv)` before compiling your own schema so its
+`$ref`s resolve. The fragments this package ships (all under
+`@went.tf/discord-bot-framework/commands/schema`, and as real standalone
+`.json` files under `build/commands/schema/` for non-TS tooling):
+`commands-file`, `chat-input-command`, `context-menu-command`,
+`application-command-option` (and its `application-command-leaf-option`/
+`application-command-subcommand`/`application-command-subcommand-group`
+building blocks), `application-command-option-choice`,
+`default-member-permissions`, `option-name`, `context-menu-name`,
+`application-command-type`, `interaction-context-type`,
+`application-integration-type`, `channel-type`.
+
+Base fragments use `additionalProperties: false` for strictness — if your
+bot needs a genuinely new top-level field per command entry, you'll need
+`unevaluatedProperties`-based composition instead of `allOf`, since
+`additionalProperties: false` only evaluates a schema's own declared
+properties, not fields declared on sibling `allOf` members.
+
+Command/option **names are required** in `commands.json`, but
+**descriptions are optional** — a description can be authored directly in
+the file, or left out and filled in at submission time (see below). Nothing
+in `commands.json` is ever localized by hand: no `name_localizations`/
+`description_localizations` fields exist in this schema at all.
+
+#### Localizing command names/descriptions
+
+`createCommandLocalizer` (from `@went.tf/discord-bot-framework/i18n`)
+generically resolves descriptions and builds `name_localizations`/
+`description_localizations` dictionaries from an i18next `TFunction`, keyed
+by the same path convention `buildApplicationCommandsBody` uses internally
+(`commands.<name>.description`, `commands.<name>.options.<option>.description`,
+and one level deeper for subcommand options):
+
+```ts
+import { createCommandLocalizer } from '@went.tf/discord-bot-framework/i18n';
+
+const localizer = createCommandLocalizer({ locales: SUPPORTED_LANGUAGES, baseLocale: DEFAULT_LANGUAGE, t: i18nextInstance.t });
+
+const commandBodies = buildApplicationCommandsBody(commandsFile, registries, {
+  resolveDescription: localizer.resolveDescription,
+  localizeNames: localizer.localizeName,
+  localizeDescriptions: localizer.localizeDescription,
+});
+```
+
+If a command/option has no `description` in `commands.json` **and** no
+`resolveDescription` hook is wired in (or the hook can't find a translation
+either), `buildApplicationCommandsBody` throws before anything is sent to
+Discord — it never silently registers a command with a missing description.
+
+To derive TS types from your own composed schema, install
+[`json-schema-to-ts`](https://www.npmjs.com/package/json-schema-to-ts)
+yourself (it's a devDependency of this package, type-only, not re-exported)
+and use its `FromSchema` the same way this package's own
+`commands/schema/index.ts` does — pass every `$ref`-ed fragment (yours and
+this package's) in the `references` option.
 
 ### `@went.tf/discord-bot-framework/client`
 
@@ -240,10 +382,10 @@ is picked up on the very next interaction with no other wiring.
 
 **Limitations:** this only reloads handler implementations already sitting in
 a registry's `byName`. It does **not** re-run command registration — changing
-a command's `getDefinition()` (name, description, options schema) still
-requires `createCommandRegistrar` and a full process restart, and a brand-new
-command file that wasn't in the registry at startup isn't picked up without
-one either. It also assumes a parallel `tsc --watch` (or equivalent) process
+a command's `commands.json` entry (name, description, options schema) still
+requires re-running `buildApplicationCommandsBody` + `createCommandRegistrar`
+and a full process restart, and a brand-new command file that wasn't in the
+registry at startup isn't picked up without one either. It also assumes a parallel `tsc --watch` (or equivalent) process
 is running, since this package has no bundler and watches compiled `build/`
 output, not `src/`. Gate it behind your own dev-only flag (e.g. a `DEV_WATCH`
 env var via `boolFromString()`) — this package intentionally has no built-in
@@ -394,6 +536,9 @@ const i18nextInstance = await initI18next(logger);
 
 Locale file content, translation-credit generation, and any custom eslint
 i18n-key-validation rules stay entirely bot-side.
+
+`createCommandLocalizer` also lives here — see "Localizing command
+names/descriptions" under `./commands` above.
 
 ## Development
 
