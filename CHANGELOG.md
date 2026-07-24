@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.0.0...v2.1.0) (2026-07-24)
+
+
+### Features
+
+* **commands:** accept UPPER_SNAKE_CASE string aliases for type enums ([c0ce462](https://github.com/WentTheFox/DiscordBotFramework/commit/c0ce4628ebd8bbe0d33e532d40ecf2d7433e2569))
+
 # [2.0.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v1.2.0...v2.0.0) (2026-07-24)
 
 
