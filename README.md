@@ -1,6 +1,6 @@
-# @wentthefox-org/discord-bot-framework
+# @went.tf/discord-bot-framework
 
-[![npm version](https://img.shields.io/npm/v/@wentthefox-org/discord-bot-framework.svg)](https://www.npmjs.com/package/@wentthefox-org/discord-bot-framework)
+[![npm version](https://img.shields.io/npm/v/@went.tf/discord-bot-framework.svg)](https://www.npmjs.com/package/@went.tf/discord-bot-framework)
 
 Shared building blocks for discord.js-based Discord bots: a nestable console
 logger, zod-based env validation, a generic HTTP API client, a slash-command
@@ -17,14 +17,14 @@ design rationale and module-to-source mapping.
 ## Install
 
 ```sh
-pnpm add @wentthefox-org/discord-bot-framework zod discord.js @discordjs/rest discord-api-types
+pnpm add @went.tf/discord-bot-framework zod discord.js @discordjs/rest discord-api-types
 ```
 
 `zod` is a real dependency of this package but must also be listed by
 consumers directly (peer resolution quirk of subpath-only usage) if you use
 `defineEnv` at your own top level. `prisma`/`@prisma/client`/`@prisma/adapter-pg`
 and `i18next`/`i18next-fs-backend` are **optional** peers — only install them
-if you import `@wentthefox-org/discord-bot-framework/db` or `/i18n`.
+if you import `@went.tf/discord-bot-framework/db` or `/i18n`.
 
 ## Subpaths
 
@@ -35,14 +35,14 @@ Postgres/Prisma or i18next never need to install those peer dependencies.
 dependencies, but it's dev-only tooling that shouldn't leak into every
 consumer's root import surface.
 
-### `@wentthefox-org/discord-bot-framework/logger`
+### `@went.tf/discord-bot-framework/logger`
 
 Backed by [pino](https://getpino.io). Plain `new Logger(prefix)` /
 `Logger.fromShardInfo(...)` stay simple, console-only, worker-thread-free
 constructors:
 
 ```ts
-import { Logger, NestableLogger, DevNullLogger } from '@wentthefox-org/discord-bot-framework/logger';
+import { Logger, NestableLogger, DevNullLogger } from '@went.tf/discord-bot-framework/logger';
 
 const logger = new Logger('Bot');
 const interactionLogger = logger.nest(`Interaction#${interaction.id}`);
@@ -56,7 +56,7 @@ webhook), and `nest()` on the result shares that same instance rather than
 spawning a new worker thread per call:
 
 ```ts
-import { createLogger } from '@wentthefox-org/discord-bot-framework/logger';
+import { createLogger } from '@went.tf/discord-bot-framework/logger';
 
 const logger = createLogger({
   prefix: 'Bot',
@@ -67,10 +67,10 @@ const logger = createLogger({
 });
 ```
 
-### `@wentthefox-org/discord-bot-framework/env`
+### `@went.tf/discord-bot-framework/env`
 
 ```ts
-import { defineEnv, boolFromString } from '@wentthefox-org/discord-bot-framework/env';
+import { defineEnv, boolFromString } from '@went.tf/discord-bot-framework/env';
 import { z } from 'zod';
 
 export const env = defineEnv({
@@ -85,10 +85,10 @@ Throws one formatted `Error` listing every failing key. Pass `{ dotenv: false }`
 to skip loading a `.env` file, or `{ source }` to validate a fixture object
 (useful in tests).
 
-### `@wentthefox-org/discord-bot-framework/api-client`
+### `@went.tf/discord-bot-framework/api-client`
 
 ```ts
-import { ApiClient, ApiAuthType } from '@wentthefox-org/discord-bot-framework/api-client';
+import { ApiClient, ApiAuthType } from '@went.tf/discord-bot-framework/api-client';
 
 const apiClient = new ApiClient(logger, {
   baseUrl: `${env.API_URL}/api`,
@@ -102,7 +102,7 @@ const { response } = await apiClient.request({
 });
 ```
 
-### `@wentthefox-org/discord-bot-framework/interactions`
+### `@went.tf/discord-bot-framework/interactions`
 
 Commands/components/modals are self-describing — put the name/id directly on
 the object (as `name` or `id`) and pass an array to a `createXRegistry()`
@@ -113,7 +113,7 @@ is a drop-in `commands`/`components`/`modals` value for
 `createInteractionRouter`/the `dispatch*` functions below.
 
 ```ts
-import { createChatInputCommandRegistry, createComponentRegistry, createInteractionRouter, handleInteractionError } from '@wentthefox-org/discord-bot-framework/interactions';
+import { createChatInputCommandRegistry, createComponentRegistry, createInteractionRouter, handleInteractionError } from '@went.tf/discord-bot-framework/interactions';
 
 const pingCommand = { name: 'ping', getDefinition: () => ({ name: 'ping', description: 'Replies with pong' }), handle: (interaction) => interaction.reply('pong') };
 
@@ -143,10 +143,10 @@ for bots that nest a `.modal` map directly on the owning chat-input command
 synthesizes a flat `Registry<string, BotModal<Ctx>>` view so `dispatchModal`
 can consume it unchanged.
 
-### `@wentthefox-org/discord-bot-framework/commands`
+### `@went.tf/discord-bot-framework/commands`
 
 ```ts
-import { buildApplicationCommandsBody, createCommandRegistrar, fixedReplyCommandFactory } from '@wentthefox-org/discord-bot-framework/commands';
+import { buildApplicationCommandsBody, createCommandRegistrar, fixedReplyCommandFactory } from '@went.tf/discord-bot-framework/commands';
 
 const registrar = createCommandRegistrar({ rest, applicationId: env.DISCORD_CLIENT_ID, logger });
 
@@ -168,7 +168,7 @@ always comes from the registry key — command authors never need to repeat
 (including nested subcommand/subcommand-group options) so required options
 precede optional ones, matching Discord's API requirement automatically.
 
-### `@wentthefox-org/discord-bot-framework/client`
+### `@went.tf/discord-bot-framework/client`
 
 Sharding is entirely opt-in. Most bots — anything single-guild or otherwise
 small enough not to need multiple discord.js shards — should just use
@@ -176,7 +176,7 @@ small enough not to need multiple discord.js shards — should just use
 shard-related at all:
 
 ```ts
-import { createBotClient } from '@wentthefox-org/discord-bot-framework/client';
+import { createBotClient } from '@went.tf/discord-bot-framework/client';
 
 const client = await createBotClient({ intents: [GatewayIntentBits.Guilds], token, onInteraction });
 ```
@@ -187,7 +187,7 @@ independent function — pulling it in doesn't require any sharding-specific
 config elsewhere in the framework:
 
 ```ts
-import { createShardManager } from '@wentthefox-org/discord-bot-framework/client';
+import { createShardManager } from '@went.tf/discord-bot-framework/client';
 
 const manager = await createShardManager({
   token, botScriptPath, logger,
@@ -195,7 +195,7 @@ const manager = await createShardManager({
 });
 ```
 
-### `@wentthefox-org/discord-bot-framework/dev`
+### `@went.tf/discord-bot-framework/dev`
 
 Live-reloads compiled command/interaction handler *implementations* during
 local development, without restarting the process or re-registering commands
@@ -207,7 +207,7 @@ crashes the bot). It deliberately does not know how to re-import a module or
 merge it into a registry, since that depends on each bot's own file layout:
 
 ```ts
-import { createHandlerWatcher } from '@wentthefox-org/discord-bot-framework/dev';
+import { createHandlerWatcher } from '@went.tf/discord-bot-framework/dev';
 import { pathToFileURL } from 'node:url';
 import { basename, extname } from 'node:path';
 
@@ -271,7 +271,7 @@ the one directly re-imported, by tagging every module resolved under
 that epoch before each `reimport()`:
 
 ```ts
-import { createHandlerWatcher, createSourceReloader } from '@wentthefox-org/discord-bot-framework/dev';
+import { createHandlerWatcher, createSourceReloader } from '@went.tf/discord-bot-framework/dev';
 import { join } from 'node:path';
 
 if (env.DEV_WATCH) {
@@ -352,7 +352,7 @@ that are easy to get wrong:
   option still needs updating to match `.ts` instead of the default
   `.js`/`.mjs`/`.cjs`, since there's no `build/` output to watch in this mode.
 
-### `@wentthefox-org/discord-bot-framework/utils`
+### `@went.tf/discord-bot-framework/utils`
 
 `runAttempts`, `getGitData`, `queueLazyPromises`, `condenseStringArray`,
 `sendMessageSlices`, `loadAllMessages`, `getUserIdentifier`,
@@ -361,12 +361,12 @@ channel lookups (`getServer`, `findServerTextChannelByName`,
 `findServerRoleByName`, `findServerMember`, `getServerMemberRole`,
 `serverMemberHasRole`, `isSameObject`).
 
-### `@wentthefox-org/discord-bot-framework/db` (optional)
+### `@went.tf/discord-bot-framework/db` (optional)
 
 Requires `@prisma/client` and `@prisma/adapter-pg` (Postgres only).
 
 ```ts
-import { createPostgresPrismaDb } from '@wentthefox-org/discord-bot-framework/db';
+import { createPostgresPrismaDb } from '@went.tf/discord-bot-framework/db';
 import { PrismaClient } from './generated/prisma/client.js';
 
 export const db = createPostgresPrismaDb(PrismaClient, { connectionString: env.DATABASE_URL });
@@ -375,12 +375,12 @@ export const db = createPostgresPrismaDb(PrismaClient, { connectionString: env.D
 Bots that only talk to an externally-managed database (or no database at
 all) never need to import this subpath or install its peer dependencies.
 
-### `@wentthefox-org/discord-bot-framework/i18n` (optional)
+### `@went.tf/discord-bot-framework/i18n` (optional)
 
 Requires `i18next` and `i18next-fs-backend`.
 
 ```ts
-import { createI18nInitializer } from '@wentthefox-org/discord-bot-framework/i18n';
+import { createI18nInitializer } from '@went.tf/discord-bot-framework/i18n';
 
 const initI18next = createI18nInitializer({
   localesDir: './src/locales',

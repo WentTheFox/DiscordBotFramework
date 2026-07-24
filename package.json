@@ -1,5 +1,5 @@
 {
-  "name": "@wentthefox-org/discord-bot-framework",
+  "name": "@went.tf/discord-bot-framework",
   "version": "1.2.0",
   "description": "Shared framework for building Discord bots with discord.js: logging, env validation, interaction dispatch, API client, and optional Postgres/i18next helpers",
   "author": "WentTheFox",
