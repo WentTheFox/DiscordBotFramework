@@ -293,6 +293,33 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   rather than the framework growing an aliasing feature for what was, on
   inspection, an isolated case of two commands sharing an identical options
   shape.
+- **`commands.json`'s numeric `type`/`contexts`/`integration_types`/
+  `channel_types` values also accept UPPER_SNAKE_CASE string aliases (e.g.
+  `"STRING"` instead of `3`), added as a semver-**minor** (`feat:`), not a
+  breaking change.** This was deliberately additive rather than a
+  replacement, specifically so the already-shipped `2.0.0` `commands.json`
+  format (and Fantastick's in-flight migration PR, all numeric) stays valid
+  forever — both forms, and any mix of the two within the same file, are
+  permanently supported. `src/commands/schema/enum-maps.ts` holds the five
+  string->number maps (`APPLICATION_COMMAND_TYPE_MAP`,
+  `APPLICATION_COMMAND_OPTION_TYPE_MAP`, `INTERACTION_CONTEXT_TYPE_MAP`,
+  `APPLICATION_INTEGRATION_TYPE_MAP`, `CHANNEL_TYPE_MAP`) plus a
+  `resolveEnumValue(map, value)` helper; every map's numeric values are
+  sourced by importing the real `discord-api-types` enums (`ApplicationCommandType.ChatInput`
+  etc.), never hand-typed numbers, so they can't drift from the real
+  values. **The transform happens in exactly one place: inside
+  `buildApplicationCommandsBody`, right before each command/option is
+  written into the final `RESTPostAPIApplicationCommandsJSONBody`** — not in
+  `parseCommandsFile`, not in the schema/type layer. Everything upstream of
+  that point (the JSON Schema fragments' `enum`s, the `FromSchema`-derived
+  types, `buildApplicationCommandsBody`'s own cross-check/discrimination
+  logic) has to treat `type` as the union of both forms throughout — see
+  `isChatInputType()` — precisely so the string form is a real first-class
+  citizen of the format, not a superficial JSON-authoring convenience
+  papered over a numeric-only internal model. Every schema `const: N` for a
+  type field became `enum: [N, 'NAME']` (not `oneOf`/`anyOf` — a flat mixed
+  `enum` is simpler and `json-schema-to-ts` resolves it to the same
+  `N | 'NAME'` union either way).
 - **Modal dispatch stays a thin adapter, not a first-class registry
   concept**, because Fantastick's real shape nests a `.modal: Record<ModalId,
   ModalHandler<Ctx>>` map on the *owning chat-input command* rather than

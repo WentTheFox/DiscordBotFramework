@@ -11,7 +11,7 @@ export const applicationCommandSubcommandGroupSchema = {
   properties: {
     name: { $ref: optionNameSchema.$id },
     description: { type: 'string' },
-    type: { const: 2 },
+    type: { enum: [2, 'SUBCOMMAND_GROUP'] },
     options: {
       type: 'array',
       items: { $ref: applicationCommandSubcommandSchema.$id },

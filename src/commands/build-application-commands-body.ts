@@ -1,6 +1,14 @@
 import { APIApplicationCommandOption, RESTPostAPIApplicationCommandsJSONBody } from 'discord-api-types/v10';
 import { NamedChatInputCommand, NamedContextMenuCommand, Registry } from '../interactions/registry.js';
 import { BaseInteractionContext } from '../interactions/types.js';
+import {
+  APPLICATION_COMMAND_OPTION_TYPE_MAP,
+  APPLICATION_COMMAND_TYPE_MAP,
+  APPLICATION_INTEGRATION_TYPE_MAP,
+  CHANNEL_TYPE_MAP,
+  INTERACTION_CONTEXT_TYPE_MAP,
+  resolveEnumValue,
+} from './schema/enum-maps.js';
 import { ApplicationCommandOption, ChatInputCommandFileEntry, CommandFileEntry } from './schema/index.js';
 
 export type DescriptionResolver = (path: readonly string[]) => string | undefined;
@@ -31,6 +39,16 @@ export interface BuildApplicationCommandsBodyRegistries<
 > {
   chatInput?: Registry<ChatInputName, NamedChatInputCommand<Ctx, ChatInputName>>;
   contextMenu?: Registry<ContextMenuName, NamedContextMenuCommand<Ctx, ContextMenuName>>;
+}
+
+/**
+ * True for both the numeric (`1`) and UPPER_SNAKE_CASE string (`'CHAT_INPUT'`)
+ * form of a commands.json entry's `type` - commands.json accepts either, see
+ * `./schema/enum-maps.ts`. The real numeric value is only ever resolved right
+ * before a command/option is written into the final REST body below.
+ */
+function isChatInputType(type: unknown): boolean {
+  return type === APPLICATION_COMMAND_TYPE_MAP.CHAT_INPUT || type === 'CHAT_INPUT';
 }
 
 function sortRequiredOptionsFirst(options: APIApplicationCommandOption[] | undefined): APIApplicationCommandOption[] | undefined {
@@ -74,9 +92,16 @@ function resolveOptionsDescriptions(
       ? resolveOptionsDescriptions(option.options, optionPath, ctx)
       : undefined;
 
+    const resolvedType = resolveEnumValue(APPLICATION_COMMAND_OPTION_TYPE_MAP, option.type);
+    const channelTypes = 'channel_types' in option && option.channel_types
+      ? option.channel_types.map((ct) => resolveEnumValue(CHANNEL_TYPE_MAP, ct))
+      : undefined;
+
     return {
       ...option,
+      type: resolvedType,
       description: description ?? '',
+      ...(channelTypes ? { channel_types: channelTypes } : {}),
       ...(nameLocalizations ? { name_localizations: nameLocalizations } : {}),
       ...(descriptionLocalizations ? { description_localizations: descriptionLocalizations } : {}),
       ...(nestedOptions ? { options: nestedOptions } : {}),
@@ -103,6 +128,12 @@ function formatValidationErrors(unmatchedFileEntries: string[], unmatchedHandler
  * expects from a validated commands.json array plus the bot's handler registries.
  * `commandsFile`'s own order drives the output order (not registry insertion order).
  *
+ * `type`/`contexts`/`integration_types`/`channel_types` may be authored in
+ * commands.json as either Discord's raw numeric values or the friendlier
+ * UPPER_SNAKE_CASE string aliases from `./schema/enum-maps.ts` - both forms
+ * are resolved to their real numeric value here, at the point each command/
+ * option is written into the final REST body, never earlier.
+ *
  * Every commands.json entry must have a matching handler, and every handler must have
  * a matching commands.json entry - both directions throw one combined error listing
  * every offender, same as a command/option left with no resolvable description. This
@@ -123,7 +154,7 @@ export function buildApplicationCommandsBody<Ctx extends BaseInteractionContext>
   const contextMenuFileNames = new Set<string>();
 
   for (const entry of commandsFile) {
-    const isChatInput = entry.type === 1;
+    const isChatInput = isChatInputType(entry.type);
     if (isChatInput) {
       chatInputFileNames.add(entry.name);
     } else {
@@ -138,6 +169,11 @@ export function buildApplicationCommandsBody<Ctx extends BaseInteractionContext>
     if (command.registerCondition && !command.registerCondition()) continue;
 
     const nameLocalizations = localizeNames?.(['commands', entry.name, 'name']);
+    const resolvedType = isChatInput
+      ? APPLICATION_COMMAND_TYPE_MAP.CHAT_INPUT
+      : resolveEnumValue(APPLICATION_COMMAND_TYPE_MAP, entry.type as number | 'USER' | 'MESSAGE');
+    const contexts = entry.contexts?.map((c) => resolveEnumValue(INTERACTION_CONTEXT_TYPE_MAP, c));
+    const integrationTypes = entry.integration_types?.map((i) => resolveEnumValue(APPLICATION_INTEGRATION_TYPE_MAP, i));
 
     if (isChatInput) {
       const chatEntry = entry as ChatInputCommandFileEntry;
@@ -158,8 +194,11 @@ export function buildApplicationCommandsBody<Ctx extends BaseInteractionContext>
       body.push({
         ...sharedMetadata,
         ...chatEntry,
+        type: resolvedType,
         description: description ?? '',
         options: sortRequiredOptionsFirst(resolvedOptions),
+        ...(contexts ? { contexts } : {}),
+        ...(integrationTypes ? { integration_types: integrationTypes } : {}),
         ...(nameLocalizations ? { name_localizations: nameLocalizations } : {}),
         ...(descriptionLocalizations ? { description_localizations: descriptionLocalizations } : {}),
       } as RESTPostAPIApplicationCommandsJSONBody);
@@ -167,6 +206,9 @@ export function buildApplicationCommandsBody<Ctx extends BaseInteractionContext>
       body.push({
         ...sharedMetadata,
         ...entry,
+        type: resolvedType,
+        ...(contexts ? { contexts } : {}),
+        ...(integrationTypes ? { integration_types: integrationTypes } : {}),
         ...(nameLocalizations ? { name_localizations: nameLocalizations } : {}),
       } as RESTPostAPIApplicationCommandsJSONBody);
     }

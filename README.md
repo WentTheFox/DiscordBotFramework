@@ -163,17 +163,27 @@ autocomplete?, modal? }`) no longer describe their own wire shape at all.
 
    ```json
    [
-     { "type": 1, "name": "ping", "description": "Replies with pong" },
+     { "type": "CHAT_INPUT", "name": "ping", "description": "Replies with pong" },
      {
-       "type": 1,
+       "type": "CHAT_INPUT",
        "name": "search",
        "description": "Search for something",
        "options": [
-         { "type": 3, "name": "query", "description": "Query string", "required": true }
+         { "type": "STRING", "name": "query", "description": "Query string", "required": true }
        ]
      }
    ]
    ```
+
+   `type` (and `contexts`/`integration_types`/`channel_types`) accept either
+   Discord's raw numeric value or the UPPER_SNAKE_CASE string alias shown
+   above — nobody should have to remember that `3` means `STRING`. Both
+   forms, and any mix of the two, are always valid; `buildApplicationCommandsBody`
+   resolves whichever form was used to its real numeric value right before
+   writing each command/option into the final REST body, using the mapping
+   in `./commands/schema`'s `enum-maps.ts` (sourced from `discord-api-types`'
+   own enums, not hand-duplicated numbers, so it can't drift). The numeric
+   form still works and always will — this is additive, not a replacement.
 
 2. Parse and validate it before doing anything else with it:
 
@@ -264,6 +274,15 @@ building blocks), `application-command-option-choice`,
 `default-member-permissions`, `option-name`, `context-menu-name`,
 `application-command-type`, `interaction-context-type`,
 `application-integration-type`, `channel-type`.
+
+`./commands/schema` also exports `enum-maps.ts`'s `APPLICATION_COMMAND_TYPE_MAP`,
+`APPLICATION_COMMAND_OPTION_TYPE_MAP`, `INTERACTION_CONTEXT_TYPE_MAP`,
+`APPLICATION_INTEGRATION_TYPE_MAP`, `CHANNEL_TYPE_MAP`, and `resolveEnumValue` —
+the same lookup tables `buildApplicationCommandsBody` uses internally to
+resolve `commands.json`'s UPPER_SNAKE_CASE string aliases, exported in case
+other tooling built on top of this package needs the same mapping (e.g. a
+linter or a codemod converting old numeric `commands.json` files to the
+string form).
 
 Base fragments use `additionalProperties: false` for strictness — if your
 bot needs a genuinely new top-level field per command entry, you'll need

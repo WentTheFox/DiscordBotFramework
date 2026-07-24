@@ -121,4 +121,35 @@ describe('parseCommandsFile', () => {
     const validate = compile();
     expect(() => parseCommandsFile(data, { validate })).toThrow();
   });
+
+  it('accepts UPPER_SNAKE_CASE string enum aliases everywhere the numeric form is valid', () => {
+    const data = [
+      {
+        type: 'CHAT_INPUT',
+        name: 'search',
+        description: 'Search for something',
+        contexts: ['GUILD', 'BOT_DM', 'PRIVATE_CHANNEL'],
+        integration_types: ['GUILD_INSTALL', 'USER_INSTALL'],
+        options: [
+          { type: 'STRING', name: 'query', description: 'Query string', required: true },
+          { type: 'CHANNEL', name: 'channel', description: 'Target channel', channel_types: ['GUILD_TEXT', 'GUILD_VOICE'] },
+          {
+            type: 'SUBCOMMAND_GROUP',
+            name: 'group',
+            description: 'Group',
+            options: [{ type: 'SUBCOMMAND', name: 'sub', description: 'Sub', options: [{ type: 'BOOLEAN', name: 'flag', description: 'Flag' }] }],
+          },
+        ],
+      },
+      { type: 'MESSAGE', name: 'Inspect' },
+    ];
+    const validate = compile();
+    expect(() => parseCommandsFile(data, { validate })).not.toThrow();
+  });
+
+  it('rejects an unknown string enum value', () => {
+    const data = [{ type: 'CHAT_INPUT', name: 'search', description: 'x', options: [{ type: 'NOT_A_REAL_TYPE', name: 'query', description: 'Query' }] }];
+    const validate = compile();
+    expect(() => parseCommandsFile(data, { validate })).toThrow();
+  });
 });

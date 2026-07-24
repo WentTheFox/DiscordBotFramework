@@ -9,7 +9,7 @@ export const chatInputCommandSchema = {
   $id: 'https://schema.went.tf/discord-bot-framework/chat-input-command.json',
   type: 'object',
   properties: {
-    type: { const: 1 },
+    type: { enum: [1, 'CHAT_INPUT'] },
     name: { $ref: optionNameSchema.$id },
     description: { type: 'string' },
     options: {

@@ -12,7 +12,7 @@ export const applicationCommandSubcommandSchema = {
   properties: {
     name: { $ref: optionNameSchema.$id },
     description: { type: 'string' },
-    type: { const: 1 },
+    type: { enum: [1, 'SUBCOMMAND'] },
     options: {
       type: 'array',
       items: { $ref: applicationCommandLeafOptionSchema.$id },

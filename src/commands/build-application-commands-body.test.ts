@@ -206,4 +206,55 @@ describe('buildApplicationCommandsBody', () => {
     const [subcommand] = body[0].options as unknown as { options: { description_localizations?: Record<string, string> }[] }[];
     expect(subcommand.options[0].description_localizations).toEqual({ 'es-ES': 'Clave' });
   });
+
+  it('accepts UPPER_SNAKE_CASE string enum aliases and resolves them to numeric values in the final body', () => {
+    const commandsFile: CommandFileEntry[] = [
+      {
+        type: 'CHAT_INPUT',
+        name: 'search',
+        description: 'search',
+        contexts: ['GUILD', 'BOT_DM'],
+        integration_types: ['USER_INSTALL'],
+        options: [
+          { name: 'sort', type: 'STRING', description: 'sort', choices: [{ name: 'A', value: 'a' }] },
+          { name: 'channel', type: 'CHANNEL', description: 'channel', channel_types: ['GUILD_TEXT', 'GUILD_VOICE'] },
+        ],
+      },
+    ];
+    const chatInput = createChatInputCommandRegistry([{ name: 'search', handle: vi.fn() }]);
+
+    const [body0] = buildApplicationCommandsBody(commandsFile, { chatInput });
+
+    expect(body0.type).toBe(1);
+    expect(body0.contexts).toEqual([0, 1]);
+    expect(body0.integration_types).toEqual([1]);
+    expect(body0.options?.[0].type).toBe(3);
+    expect(body0.options?.[1].type).toBe(7);
+    expect((body0.options?.[1] as { channel_types?: number[] }).channel_types).toEqual([0, 2]);
+  });
+
+  it('accepts a mix of numeric and string enum values within the same entry', () => {
+    const commandsFile: CommandFileEntry[] = [
+      { type: 1, name: 'mixed', description: 'mixed', options: [{ name: 'opt', type: 'INTEGER', description: 'opt' }] },
+    ];
+    const chatInput = createChatInputCommandRegistry([{ name: 'mixed', handle: vi.fn() }]);
+
+    const [body0] = buildApplicationCommandsBody(commandsFile, { chatInput });
+
+    expect(body0.type).toBe(1);
+    expect(body0.options?.[0].type).toBe(4);
+  });
+
+  it('resolves string-form context-menu type/contexts/integration_types too', () => {
+    const commandsFile: CommandFileEntry[] = [
+      { type: 'MESSAGE', name: 'Inspect', contexts: ['PRIVATE_CHANNEL'], integration_types: ['GUILD_INSTALL', 'USER_INSTALL'] },
+    ];
+    const contextMenu = createContextMenuCommandRegistry([{ name: 'Inspect', handle: vi.fn() }]);
+
+    const [body0] = buildApplicationCommandsBody(commandsFile, { contextMenu });
+
+    expect(body0.type).toBe(3);
+    expect(body0.contexts).toEqual([2]);
+    expect(body0.integration_types).toEqual([0, 1]);
+  });
 });

@@ -18,7 +18,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 3 },
+        type: { enum: [3, 'STRING'] },
         required: { type: 'boolean' },
         autocomplete: { type: 'boolean' },
         choices: { type: 'array', items: { $ref: applicationCommandOptionChoiceSchema.$id } },
@@ -33,7 +33,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 4 },
+        type: { enum: [4, 'INTEGER'] },
         required: { type: 'boolean' },
         autocomplete: { type: 'boolean' },
         choices: { type: 'array', items: { $ref: applicationCommandOptionChoiceSchema.$id } },
@@ -48,7 +48,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 5 },
+        type: { enum: [5, 'BOOLEAN'] },
         required: { type: 'boolean' },
       },
       required: ['name', 'type'],
@@ -59,7 +59,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 6 },
+        type: { enum: [6, 'USER'] },
         required: { type: 'boolean' },
       },
       required: ['name', 'type'],
@@ -70,7 +70,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 7 },
+        type: { enum: [7, 'CHANNEL'] },
         required: { type: 'boolean' },
         channel_types: { type: 'array', items: { $ref: channelTypeSchema.$id } },
       },
@@ -82,7 +82,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 8 },
+        type: { enum: [8, 'ROLE'] },
         required: { type: 'boolean' },
       },
       required: ['name', 'type'],
@@ -93,7 +93,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 9 },
+        type: { enum: [9, 'MENTIONABLE'] },
         required: { type: 'boolean' },
       },
       required: ['name', 'type'],
@@ -104,7 +104,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 10 },
+        type: { enum: [10, 'NUMBER'] },
         required: { type: 'boolean' },
         autocomplete: { type: 'boolean' },
         choices: { type: 'array', items: { $ref: applicationCommandOptionChoiceSchema.$id } },
@@ -119,7 +119,7 @@ export const applicationCommandLeafOptionSchema = {
       properties: {
         name: { $ref: optionNameSchema.$id },
         description: { type: 'string' },
-        type: { const: 11 },
+        type: { enum: [11, 'ATTACHMENT'] },
         required: { type: 'boolean' },
       },
       required: ['name', 'type'],

@@ -12,7 +12,7 @@ export const contextMenuCommandSchema = {
   $id: 'https://schema.went.tf/discord-bot-framework/context-menu-command.json',
   type: 'object',
   properties: {
-    type: { enum: [2, 3] },
+    type: { enum: [2, 3, 'USER', 'MESSAGE'] },
     name: { $ref: contextMenuNameSchema.$id },
     default_member_permissions: { $ref: defaultMemberPermissionsSchema.$id },
     contexts: {

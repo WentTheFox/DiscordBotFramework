@@ -20,6 +20,15 @@ export { parseCommandsFile } from './parse-commands-file.js';
 export type { ParseCommandsFileOptions } from './parse-commands-file.js';
 
 export {
+  APPLICATION_COMMAND_TYPE_MAP,
+  APPLICATION_COMMAND_OPTION_TYPE_MAP,
+  INTERACTION_CONTEXT_TYPE_MAP,
+  APPLICATION_INTEGRATION_TYPE_MAP,
+  CHANNEL_TYPE_MAP,
+  resolveEnumValue,
+} from './enum-maps.js';
+
+export {
   applicationCommandTypeSchema,
   interactionContextTypeSchema,
   applicationIntegrationTypeSchema,
