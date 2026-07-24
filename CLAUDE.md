@@ -172,6 +172,45 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   `./dev` has no peer dependencies at all; it's excluded purely because
   dev-only tooling shouldn't leak into every consumer's root import surface.
   Don't conflate the two exclusions as the same rationale.
+- **`src/dev/create-source-reloader.ts` exists because `createHandlerWatcher`'s
+  README recipe (cache-bust and re-import *the one changed file*) has a real
+  gap: it never picks up changes to a file that changed file merely
+  `import`s.** Node's ESM cache keys on resolved URL; giving the changed file
+  a fresh `?t=` URL doesn't change how *its own* `import './util.js'`
+  resolves, so nested imports keep returning whatever was cached at process
+  start. `createSourceReloader` fixes this generally via a
+  `module.register()` hook (`src/dev/reload-loader.ts`, loaded by
+  file-existence-checked path — `./reload-loader.js` if `build/` exists,
+  falling back to the `.ts` sibling so this package's own tests/dev running
+  straight against `src/` still work, relying on Node 24's native
+  type-stripping since there's no bundler in the loop there) that tags every
+  module resolved under a caller-supplied `rootDir` with a shared epoch
+  (`SharedArrayBuffer` + `Atomics`, since `module.register()` hooks run in
+  Node's own dedicated loader thread/realm — plain module-level state on the
+  main thread would not be visible there). Bumping the epoch before each
+  `reimport()` forces every module under `rootDir` — not just the one passed
+  to `reimport()` — to be treated as new, while anything resolved *outside*
+  `rootDir` is left on Node's normal cache untouched. That outside/inside
+  split is the entire safety property for a Discord bot: as long as the
+  gateway client and DB pool are constructed (and only ever imported) outside
+  `rootDir`, a reload can never reconnect or reopen them — verified in
+  `create-source-reloader.test.ts` by asserting an outside-root module's
+  export identity is unchanged across three reloads while an inside-root
+  change *does* propagate. **That test shells out to a real `node` child
+  process** rather than calling `createSourceReloader` in-process — Vitest
+  runs test files through its own vite-node module transform/cache, which
+  does not go through Node's native ESM loader pipeline at all, so
+  `module.register()` hooks are silently never invoked for dynamic imports
+  triggered from inside a Vitest test. This isn't a workaround to remove
+  later; it's the only way to exercise a loader-hook-based mechanism under
+  this test runner. `SourceReloaderOptions.logger` is imported as `import
+  type` (not a plain value import) specifically so Node's native type
+  stripping — used by that same fallback-to-`.ts` path — can erase it without
+  needing to resolve `../logger/index.js`, which doesn't exist as `.js` until
+  `build/` runs; a plain value import of a type-only binding silently breaks
+  that fallback since the stripper only erases syntactically-unambiguous
+  erasable syntax (`import type`, type annotations), not value imports it
+  can't prove are unused without full type-checking.
 - **`src/logger/` is backed by pino, not raw `console.*`**, chosen over winston for
   wider adoption and because pino's `.child()`/transport-worker model maps cleanly
   onto this module's existing `nest()` semantics. Discord-webhook log delivery is a
@@ -239,6 +278,7 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 | `src/db/create-postgres-prisma-db.ts` | `Fantastick/src/utils/create-db.ts` + `prisma.config.ts` pattern |
 | `src/i18n/create-i18n-initializer.ts` | `HammerTimeBot/src/constants/locales.ts` `initI18next` |
 | `src/dev/create-handler-watcher.ts` | New for this package, no direct bot precedent (none of the three source bots had hot-reload) |
+| `src/dev/create-source-reloader.ts`, `reload-loader.ts` | New for this package; built for Fantastick's `DEV_WATCH` mode after `createHandlerWatcher`'s single-file reload missed changes to shared modal-handler/util files |
 
 ## Conventions
 

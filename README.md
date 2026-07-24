@@ -249,6 +249,70 @@ output, not `src/`. Gate it behind your own dev-only flag (e.g. a `DEV_WATCH`
 env var via `boolFromString()`) — this package intentionally has no built-in
 concept of a dev/prod mode.
 
+If your `onChange` callback re-imports only the *one file that changed* (as
+in the example above), it correctly picks up edits to a command file itself,
+but **not** edits to a shared module that command statically imports — a
+modal handler, a util, anything under a second file. Node's ESM cache keys on
+resolved URL: giving the changed file a fresh cache-busted URL doesn't affect
+how its own `import './some-util.js'` statement resolves, so that nested
+import still returns the stale cached instance. Reimporting one small
+aggregator module that pulls in your whole command/component tree (its
+`registry.byName` values in particular) instead of one file at a time avoids
+this — see `createSourceReloader` below.
+
+#### `createSourceReloader`
+
+Re-imports a module — and everything it transitively imports from under a
+given root directory — as brand-new instances on every call, without
+restarting the process. Unlike the single-file `?t=` trick above, this
+correctly picks up changes to *any* file in the reloaded subtree, not just
+the one directly re-imported, by tagging every module resolved under
+`rootDir` with a shared epoch via a `module.register()` hook, and bumping
+that epoch before each `reimport()`:
+
+```ts
+import { createHandlerWatcher, createSourceReloader } from '@wentthefox-org/discord-bot-framework/dev';
+import { join } from 'node:path';
+
+if (env.DEV_WATCH) {
+  const reloader = createSourceReloader({ rootDir: currentFolder, logger });
+  const interactionsPath = join(currentFolder, 'utils', 'interactions.ts');
+
+  const watcher = createHandlerWatcher({
+    paths: [join(currentFolder, 'commands'), join(currentFolder, 'components'), join(currentFolder, 'utils')],
+    filter: filePath => filePath.endsWith('.ts'),
+    logger,
+    onChange: async () => {
+      const fresh = await reloader.reimport(interactionsPath);
+      // `registry.byName` is what dispatch reads live — merge into the existing
+      // registry object in place; the binding in the module that declared it
+      // (and everything that imported it) can't be swapped from out here.
+      Object.assign(chatInputCommandRegistry.byName, fresh.chatInputCommandRegistry.byName);
+      Object.assign(componentRegistry.byName, fresh.componentRegistry.byName);
+    },
+  });
+
+  process.on('SIGINT', () => watcher.close());
+}
+```
+
+Anything resolved **outside** `rootDir` — `node_modules`, this framework,
+compiled output elsewhere — is left completely alone, on Node's normal
+module cache. That's the property that makes this safe to use for a Discord
+bot: as long as your gateway client and DB pool are created (and imported
+from) outside `rootDir` — true for the shard-script shape shown under
+`createShardManager` below, where the client is built directly in `bot.ts`
+and never re-imported by the reloaded `interactions.ts` subtree — a reload
+never reconnects the client or reopens the pool. Reloading a module *with*
+top-level side effects (one that opens a connection, starts a timer) will
+duplicate those side effects on every call; keep whatever you reload
+side-effect-free (a thin aggregator of plain object exports, like
+`interactions.ts` above).
+
+`reimport()`'s epoch tag lives on a `SharedArrayBuffer`, so it needs
+`--allow-worker` under Node's permission model, same as `module.register()`
+itself.
+
 **Combining with `createShardManager`:** the example above assumes the
 process calling `createHandlerWatcher` is also the one holding the
 registries — true for `createBotClient` bots, and true for a
