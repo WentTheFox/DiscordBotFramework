@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v1.1.0...v1.2.0) (2026-07-24)
+
+
+### Features
+
+* **dev:** add createSourceReloader for whole-subtree hot reload ([0617402](https://github.com/WentTheFox/DiscordBotFramework/commit/0617402aedb6e580ea195e42f3524183d24fe408))
+
 # [1.1.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v1.0.0...v1.1.0) (2026-07-23)
 
 
