@@ -9,7 +9,7 @@ import {
   INTERACTION_CONTEXT_TYPE_MAP,
   resolveEnumValue,
 } from './schema/enum-maps.js';
-import { ApplicationCommandOption, ChatInputCommandFileEntry, CommandFileEntry } from './schema/index.js';
+import { ApplicationCommandOption, ChatInputCommandFileEntry, CommandsFile, getCommandsFileEntries } from './schema/index.js';
 
 export type DescriptionResolver = (path: readonly string[]) => string | undefined;
 export type LocalizationResolver = (path: readonly string[]) => Record<string, string> | undefined;
@@ -128,6 +128,11 @@ function formatValidationErrors(unmatchedFileEntries: string[], unmatchedHandler
  * expects from a validated commands.json array plus the bot's handler registries.
  * `commandsFile`'s own order drives the output order (not registry insertion order).
  *
+ * Accepts either root shape `commandsFileSchema` allows: a bare array, or that
+ * array wrapped as `{ $schema?, commands }` (the form that lets `commands.json`
+ * carry a real inline `$schema` property for editor autocomplete, since a bare
+ * array can't).
+ *
  * `type`/`contexts`/`integration_types`/`channel_types` may be authored in
  * commands.json as either Discord's raw numeric values or the friendlier
  * UPPER_SNAKE_CASE string aliases from `./schema/enum-maps.ts` - both forms
@@ -140,11 +145,12 @@ function formatValidationErrors(unmatchedFileEntries: string[], unmatchedHandler
  * never silently sends an incomplete body to Discord's API.
  */
 export function buildApplicationCommandsBody<Ctx extends BaseInteractionContext>(
-  commandsFile: readonly CommandFileEntry[],
+  commandsFileInput: CommandsFile,
   registries: BuildApplicationCommandsBodyRegistries<Ctx>,
   options: BuildApplicationCommandsBodyOptions = {},
 ): RESTPostAPIApplicationCommandsJSONBody[] {
   const { sharedMetadata = {}, resolveDescription, localizeNames, localizeDescriptions } = options;
+  const commandsFile = getCommandsFileEntries(commandsFileInput);
 
   const body: RESTPostAPIApplicationCommandsJSONBody[] = [];
   const unmatchedFileEntries: string[] = [];

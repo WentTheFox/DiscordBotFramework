@@ -152,4 +152,31 @@ describe('parseCommandsFile', () => {
     const validate = compile();
     expect(() => parseCommandsFile(data, { validate })).toThrow();
   });
+
+  it('accepts the object-wrapped { $schema?, commands } root shape', () => {
+    const data = {
+      $schema: './commands.schema.json',
+      commands: [{ type: 'CHAT_INPUT', name: 'ping', description: 'Replies with pong' }],
+    };
+    const validate = compile();
+    expect(() => parseCommandsFile(data, { validate })).not.toThrow();
+  });
+
+  it('accepts the object-wrapped form without $schema (optional)', () => {
+    const data = { commands: [{ type: 'CHAT_INPUT', name: 'ping', description: 'Replies with pong' }] };
+    const validate = compile();
+    expect(() => parseCommandsFile(data, { validate })).not.toThrow();
+  });
+
+  it('rejects the object-wrapped form missing commands', () => {
+    const data = { $schema: './commands.schema.json' };
+    const validate = compile();
+    expect(() => parseCommandsFile(data, { validate })).toThrow();
+  });
+
+  it('rejects unexpected top-level properties in the object-wrapped form', () => {
+    const data = { commands: [], notARealField: true };
+    const validate = compile();
+    expect(() => parseCommandsFile(data, { validate })).toThrow();
+  });
 });

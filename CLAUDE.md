@@ -320,6 +320,80 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   type field became `enum: [N, 'NAME']` (not `oneOf`/`anyOf` — a flat mixed
   `enum` is simpler and `json-schema-to-ts` resolves it to the same
   `N | 'NAME'` union either way).
+- **`commandsFileSchema` accepts a second root shape, `{ $schema?, commands
+  }`, alongside the original bare array — also additive, semver-minor.** A
+  bare JSON array can never carry an inline `$schema` property (`$schema` is
+  only ever valid on a JSON *object*), so a bot hand-editing a bare-array
+  `commands.json` gets zero editor autocomplete/validation — there's no way
+  to point an editor (VS Code, JetBrains, ...) at the right schema from
+  inside the file itself. Wrapping the array as `{ "$schema":
+  "./commands.schema.json", "commands": [...] }` fixes this with no editor
+  config needed, since `$schema` accepts a relative file path, not just a
+  resolvable URL. `command-file-entry.schema.ts` (new) promotes "one
+  chat-input-or-context-menu entry" — previously inlined directly inside
+  `commandsFileSchema`'s `items` — to its own named fragment with its own
+  `$id`, specifically so both root-shape branches (and a bot's own composed
+  schema) can `$ref` one single source of truth for "what is one entry"
+  instead of duplicating it. `getCommandsFileEntries()` (new,
+  `src/commands/schema/index.ts`) normalizes either root shape down to the
+  flat entries array; `buildApplicationCommandsBody` calls it as its very
+  first step so every downstream line of that function is unchanged and
+  unaware which shape was used. **A bot's own `commands.schema.json` cannot
+  reuse a framework-provided TS composition helper for this** — it's
+  authored as plain JSON specifically so external tools can consume it too,
+  not routed through this package's `.ts` fragment-composition machinery —
+  so combining bot-specific narrowing (e.g. a `name` enum) with support for
+  both root shapes uses a local `$defs` entry referenced from both branches
+  (see the README's recipe and `compose-example.test.ts`'s second
+  `describe` block), not a function call. The bare-array form isn't
+  deprecated and never will be; this is a second supported shape, not a
+  replacement.
+- **A bot's own `commands.schema.json` `$ref`s this package's fragments by a
+  real relative filesystem path into `node_modules`
+  (`"../node_modules/@went.tf/discord-bot-framework/build/commands/schema/chat-input-command.json"`),
+  not the fragments' own `$id` (an opaque `https://schema.went.tf/...`
+  string, never meant to be fetched) — but ajv never sees that relative path
+  directly.** Only a real path is something an editor (VS Code, JetBrains,
+  ...) can actually follow to offer autocomplete/validation while
+  hand-editing `commands.schema.json` — the `$id` form either fails silently
+  or makes an unwanted network request to a domain serving nothing at that
+  path. **Two solid implementation attempts at making ajv resolve that same
+  relative path directly both failed, for real, non-dev-environment
+  reasons — this is why `resolveCommandsSchemaRefs()` exists instead:**
+  1. Registering fragments under a bare relative-path *string* alias (no
+     URI resolution) doesn't work: confirmed via a throwaway test that ajv
+     resolves relative `$ref`s through real RFC3986 URI resolution against
+     the referencing schema's own `$id`/base (like a browser resolving a
+     relative link against the current page's URL), never by matching the
+     literal `$ref` string against a registry key.
+  2. Registering fragments under their real `file://` location (computed
+     from `import.meta.url`) and requiring the bot's own schema to set its
+     `$id` to *its own* real `file://` location doesn't work either, and
+     this one isn't a dev-environment quirk: **pnpm always symlinks
+     packages from its `.pnpm` virtual store into `node_modules`**, and
+     Node's ESM loader resolves `import.meta.url` through that symlink to
+     the real store path (e.g. `.pnpm/@went.tf+discord-bot-framework@x.y.z/node_modules/...`) —
+     a path a bot's own relative `$ref`, correctly resolved against its own
+     unrelated real location, can never independently compute to match.
+     Confirmed by literally running the resulting code in a real (non-Vitest)
+     Node process against a `pnpm link`-installed copy and observing the
+     exact mismatched paths in ajv's `MissingRefError`.
+
+  **The actual fix: `resolveCommandsSchemaRefs(schema)` deep-walks a bot's
+  raw parsed schema and rewrites any `$ref` whose *filename* (last path
+  segment) matches a shipped fragment to that fragment's canonical `$id`,
+  regardless of what relative-path prefix was used to reach it.** This
+  sidesteps ajv's own filesystem/URI resolution for the framework's
+  fragments entirely — no `$id`-setting requirement on the bot's own schema,
+  no dependency on pnpm's node_modules layout being resolvable at all — while
+  the raw JSON file itself stays untouched (still real relative paths, for
+  the editor). Local refs (`#/$defs/...`) aren't fragment filenames, so
+  they're left alone. Call it on the raw parsed schema before
+  `ajv.compile()`, after `registerFrameworkSchemas(ajv)` (which now only
+  registers the canonical `$id`, unchanged from before either of the two
+  broken attempts above). Regression-tested in `compose-example.test.ts`'s
+  third `describe` block, including two different relative-path prefixes
+  resolving to the same fragment and a local `$defs` ref staying untouched.
 - **Modal dispatch stays a thin adapter, not a first-class registry
   concept**, because Fantastick's real shape nests a `.modal: Record<ModalId,
   ModalHandler<Ctx>>` map on the *owning chat-input command* rather than

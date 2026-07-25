@@ -162,18 +162,30 @@ autocomplete?, modal? }`) no longer describe their own wire shape at all.
    below):
 
    ```json
-   [
-     { "type": "CHAT_INPUT", "name": "ping", "description": "Replies with pong" },
-     {
-       "type": "CHAT_INPUT",
-       "name": "search",
-       "description": "Search for something",
-       "options": [
-         { "type": "STRING", "name": "query", "description": "Query string", "required": true }
-       ]
-     }
-   ]
+   {
+     "$schema": "./commands.schema.json",
+     "commands": [
+       { "type": "CHAT_INPUT", "name": "ping", "description": "Replies with pong" },
+       {
+         "type": "CHAT_INPUT",
+         "name": "search",
+         "description": "Search for something",
+         "options": [
+           { "type": "STRING", "name": "query", "description": "Query string", "required": true }
+         ]
+       }
+     ]
+   }
    ```
+
+   The `{ "$schema", "commands" }` wrapper is what makes `commands.json`
+   editable with real autocomplete/validation in VS Code, JetBrains, or any
+   other JSON-Schema-aware editor: `$schema` is only ever valid on a JSON
+   *object*, and a bare array can never carry one. A **bare array** (just
+   the `commands` value on its own, no wrapper) is still fully supported —
+   nothing about the wrapper is required — but you lose the inline `$schema`
+   editor hookup if you use it. `buildApplicationCommandsBody` accepts
+   either shape directly.
 
    `type` (and `contexts`/`integration_types`/`channel_types`) accept either
    Discord's raw numeric value or the UPPER_SNAKE_CASE string alias shown
@@ -189,9 +201,13 @@ autocomplete?, modal? }`) no longer describe their own wire shape at all.
 
    ```ts
    import { Ajv } from 'ajv';
-   import { parseCommandsFile, registerFrameworkSchemas } from '@went.tf/discord-bot-framework/commands/schema';
-   import myCommandsSchema from './commands.schema.json' with { type: 'json' };
+   import { parseCommandsFile, registerFrameworkSchemas, resolveCommandsSchemaRefs } from '@went.tf/discord-bot-framework/commands/schema';
+   import myCommandsSchemaRaw from './commands.schema.json' with { type: 'json' };
    import commandsData from './commands.json' with { type: 'json' };
+
+   // Rewrites your schema's relative-path $refs (into node_modules) to each
+   // fragment's real ajv-resolvable identity - see "JSON Schema fragments" below.
+   const myCommandsSchema = resolveCommandsSchemaRefs(myCommandsSchemaRaw);
 
    const ajv = new Ajv({ allErrors: true, allowUnionTypes: true });
    registerFrameworkSchemas(ajv);
@@ -243,37 +259,80 @@ This package ships only the **generic, reusable JSON Schema building
 blocks** mirroring `discord-api-types`' command/option shapes — it does not
 dictate one rigid schema for your whole `commands.json` file. Compose your
 own schema on top via `$ref`/`allOf`, e.g. to narrow `name` to an enum of
-your bot's actual command names:
+your bot's actual command names. Since a bot's own `commands.schema.json` is
+authored as plain JSON (so external tools can consume it too, not just this
+package's TS composition helpers), supporting **both** the bare-array and
+the `{ $schema, commands }` root shapes over the same narrowed entry uses a
+local `$defs` entry referenced from both branches:
 
 ```json
 {
-  "$id": "https://schema.your-bot.example/commands-file.json",
-  "type": "array",
-  "items": {
-    "oneOf": [
-      {
-        "allOf": [
-          { "$ref": "https://schema.went.tf/discord-bot-framework/chat-input-command.json" },
-          { "properties": { "name": { "enum": ["ping", "search"] } } }
-        ]
+  "$defs": {
+    "entry": {
+      "oneOf": [
+        {
+          "allOf": [
+            { "$ref": "../node_modules/@went.tf/discord-bot-framework/build/commands/schema/chat-input-command.json" },
+            { "properties": { "name": { "enum": ["ping", "search"] } } }
+          ]
+        },
+        { "$ref": "../node_modules/@went.tf/discord-bot-framework/build/commands/schema/context-menu-command.json" }
+      ]
+    }
+  },
+  "oneOf": [
+    { "type": "array", "items": { "$ref": "#/$defs/entry" } },
+    {
+      "type": "object",
+      "properties": {
+        "$schema": { "type": "string" },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
       },
-      { "$ref": "https://schema.went.tf/discord-bot-framework/context-menu-command.json" }
-    ]
-  }
+      "required": ["commands"],
+      "additionalProperties": false
+    }
+  ]
 }
 ```
 
-Call `registerFrameworkSchemas(ajv)` before compiling your own schema so its
-`$ref`s resolve. The fragments this package ships (all under
+`$ref` uses a **real relative filesystem path** into `node_modules` (the
+exact `../` count doesn't have to be exactly right — see below) rather than
+an opaque URL — this is what makes an editor (VS Code, JetBrains, ...)
+actually able to follow it and offer real autocomplete/validation while you
+hand-edit `commands.schema.json`, since it points at a real file: this
+package ships its raw fragment `.json` mirrors precisely so a path like this
+resolves to something real on disk, no network access involved.
+
+**ajv** can't follow that same relative path directly — it resolves relative
+`$ref`s via real RFC3986 URI resolution against the referencing schema's own
+`$id`, and `node_modules` is virtualized under a symlinked store by pnpm (and
+similar tools), so there is no `$id` value that makes ajv's own resolution
+land on the right file for every install. `resolveCommandsSchemaRefs()`
+sidesteps this: it rewrites any `$ref` matching a shipped fragment's
+filename to that fragment's canonical `$id` (whatever relative-path prefix
+you used), which `registerFrameworkSchemas(ajv)` has already registered.
+Your own local refs (e.g. `#/$defs/...`) are left untouched:
+
+```ts
+import myCommandsSchemaRaw from './commands.schema.json' with { type: 'json' };
+const myCommandsSchema = resolveCommandsSchemaRefs(myCommandsSchemaRaw);
+registerFrameworkSchemas(ajv); // before ajv.compile(myCommandsSchema)
+```
+
+If you don't need the name-narrowing (or any other bot-specific constraint),
+skip authoring your own schema entirely and validate directly against this
+package's own `commandsFileSchema` — it already accepts both root shapes.
+
+The fragments this package ships (all under
 `@went.tf/discord-bot-framework/commands/schema`, and as real standalone
 `.json` files under `build/commands/schema/` for non-TS tooling):
-`commands-file`, `chat-input-command`, `context-menu-command`,
-`application-command-option` (and its `application-command-leaf-option`/
-`application-command-subcommand`/`application-command-subcommand-group`
-building blocks), `application-command-option-choice`,
-`default-member-permissions`, `option-name`, `context-menu-name`,
-`application-command-type`, `interaction-context-type`,
-`application-integration-type`, `channel-type`.
+`commands-file`, `command-file-entry`, `chat-input-command`,
+`context-menu-command`, `application-command-option` (and its
+`application-command-leaf-option`/`application-command-subcommand`/
+`application-command-subcommand-group` building blocks),
+`application-command-option-choice`, `default-member-permissions`,
+`option-name`, `context-menu-name`, `application-command-type`,
+`interaction-context-type`, `application-integration-type`, `channel-type`.
 
 `./commands/schema` also exports `enum-maps.ts`'s `APPLICATION_COMMAND_TYPE_MAP`,
 `APPLICATION_COMMAND_OPTION_TYPE_MAP`, `INTERACTION_CONTEXT_TYPE_MAP`,

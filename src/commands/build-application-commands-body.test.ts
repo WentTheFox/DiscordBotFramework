@@ -257,4 +257,15 @@ describe('buildApplicationCommandsBody', () => {
     expect(body0.contexts).toEqual([2]);
     expect(body0.integration_types).toEqual([0, 1]);
   });
+
+  it('accepts the object-wrapped { $schema?, commands } root shape, producing an identical body to the bare array', () => {
+    const arrayForm: CommandFileEntry[] = [{ type: 1, name: 'ping', description: 'ping' }];
+    const objectForm = { $schema: './commands.schema.json', commands: arrayForm };
+    const chatInput = createChatInputCommandRegistry([{ name: 'ping', handle: vi.fn() }]);
+
+    const fromArray = buildApplicationCommandsBody(arrayForm, { chatInput });
+    const fromObject = buildApplicationCommandsBody(objectForm, { chatInput });
+
+    expect(fromObject).toEqual(fromArray);
+  });
 });
