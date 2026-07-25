@@ -152,14 +152,33 @@ If other code (e.g. a locale-file type, or a helper building a command
 mention) needs the literal name/id union as a *type*, derive it from the
 registry you already built instead of hand-writing a parallel
 `const enum CommandName { ... }` — that enum is exactly the duplication the
-registry's `const` type inference exists to avoid:
+registry's `const` type inference exists to avoid. **This only works if each
+command's own `name` stays a literal type up to the point it's passed into
+`createChatInputCommandRegistry`** — a real gotcha, not a hypothetical one:
+a plain, unannotated `const pingCommand = { name: 'ping', handle: ... };`
+widens `name` to `string` right there (standard TS object-literal-property
+widening, the same reason `const x = { n: 1 }; x.n` is `number` not `1`),
+*before* it ever reaches the registry call, so `RegistryName` would silently
+resolve to `string` too. `satisfies BotChatInputCommand` does **not** fix
+this either — it only checks compatibility, it doesn't request a literal.
+Pin each command's own name as an explicit generic argument instead (the
+same pattern this package's own registry tests use):
 
 ```ts
-import { RegistryName } from '@went.tf/discord-bot-framework/interactions';
+import { NamedChatInputCommand, RegistryName } from '@went.tf/discord-bot-framework/interactions';
+
+const pingCommand: NamedChatInputCommand<Ctx, 'ping'> = { name: 'ping', handle: (i) => i.reply('pong') };
+const searchCommand: NamedChatInputCommand<Ctx, 'search'> = { name: 'search', handle: (i) => i.reply('...') };
 
 const chatInputCommandRegistry = createChatInputCommandRegistry([pingCommand, searchCommand]);
 type ChatInputCommandName = RegistryName<typeof chatInputCommandRegistry>; // 'ping' | 'search'
 ```
+
+(Object literals passed directly inline into the array — not through an
+intermediate `const` — infer literally on their own, since TS 5's `const`
+type parameter modifier on `createChatInputCommandRegistry` requests literal
+inference for its argument; the explicit-generic form above is what you need
+once each command lives in its own file, which is the normal case.)
 
 A command's name should only ever be written down in two places: its
 `commands.json` entry and its own registry object's `name` field — nothing

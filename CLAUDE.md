@@ -537,6 +537,31 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   and its own registry object's `name`/`id` field; everywhere else should
   reference one of those two, or `RegistryName<typeof registry>`'s derived
   type, never re-declare the list.
+- **`RegistryName<R>` only actually returns a literal union if every command
+  object's `name` is *already* a literal type by the time it reaches
+  `create*Registry()` — this is not automatic and caused real confusion
+  during Fantastick's migration, worth re-stating so it isn't re-debugged.**
+  A plain, unannotated `const pingCommand = { name: 'ping', handle: ... };`
+  widens `name` to `string` at that declaration (ordinary TS object-literal-
+  property widening — the same reason `const x = { n: 1 }; x.n` is `number`,
+  not `1`), *before* the object ever reaches the registry call; wrapping it
+  in `satisfies BotChatInputCommand` does not fix this, since `satisfies`
+  only checks compatibility against the target type, it doesn't request a
+  literal the way a type annotation naming an exact literal does. Confirmed
+  via `const x: T = 'not-a-real-value'` compiling with no error when `T` was
+  wrongly assumed to be a `RegistryName`-derived literal union but the
+  underlying command objects weren't annotated — the only real signal, since
+  `const y: T = 0 as never` (the first, wrong instinct) always "passes"
+  regardless of what `T` actually is, `never` being assignable to everything.
+  The fix, and the pattern this package's own `registry.test.ts` already
+  uses, is pinning each command's name as an explicit generic argument at
+  its declaration site: `const pingCommand: NamedChatInputCommand<Ctx,
+  'ping'> = { name: 'ping', handle: ... };` (or the object literal passed
+  directly inline into the `create*Registry()` array argument, which *does*
+  infer literally on its own via the `const` type parameter modifier — but
+  that's rarely how bots structure things once each command has its own
+  file). The README's `RegistryName` example was originally written with the
+  unannotated form and was itself silently wrong until this was caught.
 
 ## Module → source mapping
 
