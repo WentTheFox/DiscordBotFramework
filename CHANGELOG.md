@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.2.0...v2.3.0) (2026-07-25)
+
+
+### Features
+
+* **interactions:** add RegistryName<R> to derive a registry's name union ([cc66fad](https://github.com/WentTheFox/DiscordBotFramework/commit/cc66fadbb8299d02a877237afbf7a66b0f704739))
+
 # [2.2.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.1.0...v2.2.0) (2026-07-25)
 
 
