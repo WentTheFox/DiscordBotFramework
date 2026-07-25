@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.1.0...v2.2.0) (2026-07-25)
+
+
+### Features
+
+* **commands:** accept a { $schema, commands } object root for editor autocomplete ([2363e5a](https://github.com/WentTheFox/DiscordBotFramework/commit/2363e5a4a0afed942b7c8ebc4e915c35d95641e2))
+
 # [2.1.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.0.0...v2.1.0) (2026-07-24)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@went.tf/discord-bot-framework",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Shared framework for building Discord bots with discord.js: logging, env validation, interaction dispatch, API client, and optional Postgres/i18next helpers",
   "author": "WentTheFox <mail@went.tf> (https://github.com/WentTheFox)",
   "license": "MIT",
