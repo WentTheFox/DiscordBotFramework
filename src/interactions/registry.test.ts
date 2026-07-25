@@ -8,6 +8,7 @@ import {
   flattenCommandModals,
   NamedChatInputCommand,
   Registry,
+  RegistryName,
 } from './registry.js';
 
 const context = { logger: new DevNullLogger() };
@@ -27,6 +28,7 @@ describe('createChatInputCommandRegistry', () => {
     expect(registry.isKnown('missing')).toBe(false);
 
     expectTypeOf(registry).toEqualTypeOf<Registry<'ping' | 'pong', typeof ping | typeof pong>>();
+    expectTypeOf<RegistryName<typeof registry>>().toEqualTypeOf<'ping' | 'pong'>();
   });
 
   it('throws on duplicate names', () => {

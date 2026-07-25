@@ -148,6 +148,24 @@ for bots that nest a `.modal` map directly on the owning chat-input command
 synthesizes a flat `Registry<string, BotModal<Ctx>>` view so `dispatchModal`
 can consume it unchanged.
 
+If other code (e.g. a locale-file type, or a helper building a command
+mention) needs the literal name/id union as a *type*, derive it from the
+registry you already built instead of hand-writing a parallel
+`const enum CommandName { ... }` — that enum is exactly the duplication the
+registry's `const` type inference exists to avoid:
+
+```ts
+import { RegistryName } from '@went.tf/discord-bot-framework/interactions';
+
+const chatInputCommandRegistry = createChatInputCommandRegistry([pingCommand, searchCommand]);
+type ChatInputCommandName = RegistryName<typeof chatInputCommandRegistry>; // 'ping' | 'search'
+```
+
+A command's name should only ever be written down in two places: its
+`commands.json` entry and its own registry object's `name` field — nothing
+else should define it again, only reference the same string (or the derived
+`RegistryName` type) that those two already agree on.
+
 ### `@went.tf/discord-bot-framework/commands`
 
 **Every command's wire definition (name, description, options, permissions)

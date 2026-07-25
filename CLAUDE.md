@@ -520,6 +520,23 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   pre-registered with Discord, so there's no shared "flatten to JSON" need
   driving unification. Bots keep whatever extra field they want alongside
   `id`/`handle`.
+- **`RegistryName<R>`** (`src/interactions/registry.ts`) extracts the literal
+  name/id union a `create*Registry()` call already inferred from its input
+  array (`R extends Registry<infer Name, unknown> ? Name : never`), so a bot
+  that needs that union elsewhere (a locale-file type, a command-mention
+  helper, ...) derives it from the registry instead of hand-writing a
+  parallel `const enum CommandName { ... }`. This was added after Fantastick
+  did exactly that during its `commands.json` migration — a
+  `BotChatInputCommandName`/`BotMessageContextMenuCommandName` const enum,
+  hand-mirroring the same name list already present in both `commands.json`
+  and each command file's own `name` field, i.e. a third definition site for
+  something `createChatInputCommandRegistry`'s `const` type param already
+  derives for free. The README's `./interactions` section calls this out
+  explicitly (not just documented here) specifically so it doesn't recur:
+  a command/component name should only ever be *defined* in `commands.json`
+  and its own registry object's `name`/`id` field; everywhere else should
+  reference one of those two, or `RegistryName<typeof registry>`'s derived
+  type, never re-declare the list.
 
 ## Module → source mapping
 

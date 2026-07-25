@@ -24,6 +24,14 @@ export interface Registry<Name extends string, T> {
   isKnown(name: string): name is Name;
 }
 
+/**
+ * Extracts the literal name union a `create*Registry` call already inferred
+ * from its input array, so a bot can derive e.g. `type ChatInputCommandName =
+ * RegistryName<typeof chatInputCommandRegistry>` instead of hand-maintaining
+ * a parallel enum of the same names.
+ */
+export type RegistryName<R extends Registry<string, unknown>> = R extends Registry<infer Name, unknown> ? Name : never;
+
 function buildRegistry<Name extends string, T>(items: readonly T[], keyOf: (item: T) => Name): Registry<Name, T> {
   const byName = {} as Record<Name, T>;
   for (const item of items) {
