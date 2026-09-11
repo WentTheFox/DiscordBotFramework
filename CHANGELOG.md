@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.3.0...v2.4.0) (2026-09-11)
+
+
+### Features
+
+* **client:** add gracefulRespawnSignal option to createShardManager ([9a04d52](https://github.com/WentTheFox/DiscordBotFramework/commit/9a04d52b00957201b43d17eda57bd56d7a635bd7))
+
 # [2.3.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.2.0...v2.3.0) (2026-07-25)
 
 
