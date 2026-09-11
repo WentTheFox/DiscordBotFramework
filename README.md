@@ -452,6 +452,34 @@ const manager = await createShardManager({
 });
 ```
 
+**Graceful deploys with `gracefulRespawnSignal`:** a plain process restart
+kills every shard at once, then respawns them sequentially — Discord's
+identify rate limit forces roughly one shard every 5s, so a bot with 20+
+shards can be fully down for minutes on every deploy. Passing
+`gracefulRespawnSignal: 'SIGUSR2'` registers a handler that calls the
+manager's `respawnAll()` instead, which kills/respawns shards **one at a
+time** on the same long-lived manager process — at most one shard is briefly
+offline (a few seconds) at any point, not the whole fleet:
+
+```ts
+const manager = await createShardManager({
+  token, botScriptPath, logger,
+  beforeSpawn: () => startupCommandsUpdate(logger),
+  gracefulRespawnSignal: 'SIGUSR2',
+});
+```
+
+Your deploy script then sends that signal to the running manager process
+(e.g. `kill -s USR2 "$(pm2 pid my-bot)"` — note dash's `kill` builtin
+rejects bash's `-SIGUSR2` form, use `-s USR2`) instead of restarting it,
+whenever only shard-side code changed. Since a forked shard process re-reads
+its script fresh off disk, this picks up ordinary code changes fine — but
+NOT changes to the top-level process that calls `createShardManager` itself
+(this file, its `beforeSpawn`, or anything it holds in memory), since that
+process is never restarted. Fall back to a real restart for those, and for
+anything that needs `beforeSpawn`'s one-time setup (e.g. slash command
+registration) to re-run.
+
 ### `@went.tf/discord-bot-framework/dev`
 
 Live-reloads compiled command/interaction handler *implementations* during
