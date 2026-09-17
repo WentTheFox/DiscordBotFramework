@@ -30,6 +30,61 @@ describe('handleWebhookInteractionRequest', () => {
     expect(onInteraction).not.toHaveBeenCalled();
   });
 
+  it('logs signature-rejection diagnostics, preferring cf-connecting-ip over x-forwarded-for', async () => {
+    const { rawPublicKeyHex } = generateKeys();
+    const logger = new DevNullLogger();
+    const debugSpy = vi.spyOn(logger, 'debug');
+
+    await handleWebhookInteractionRequest(
+      {
+        signature: 'not-valid',
+        timestamp: '1700000000',
+        rawBody: '{"type":1}',
+        headers: {
+          'cf-connecting-ip': '203.0.113.1',
+          'x-forwarded-for': '198.51.100.9, 10.0.0.1',
+          'user-agent': 'curl/8.0',
+        },
+      },
+      { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn() },
+    );
+
+    expect(debugSpy).toHaveBeenCalledWith(
+      'Webhook interaction signature-rejection diagnostics',
+      expect.objectContaining({
+        sourceIp: '203.0.113.1',
+        userAgent: 'curl/8.0',
+        hasSignatureHeader: true,
+        hasTimestampHeader: true,
+        signatureLength: 'not-valid'.length,
+        bodyLength: Buffer.byteLength('{"type":1}'),
+      }),
+    );
+  });
+
+  it('falls back to x-forwarded-for, and reports absent headers correctly', async () => {
+    const { rawPublicKeyHex } = generateKeys();
+    const logger = new DevNullLogger();
+    const debugSpy = vi.spyOn(logger, 'debug');
+
+    await handleWebhookInteractionRequest(
+      { signature: undefined, timestamp: undefined, rawBody: '', headers: { 'x-forwarded-for': '198.51.100.9, 10.0.0.1' } },
+      { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn() },
+    );
+
+    expect(debugSpy).toHaveBeenCalledWith(
+      'Webhook interaction signature-rejection diagnostics',
+      expect.objectContaining({
+        sourceIp: '198.51.100.9',
+        userAgent: undefined,
+        hasSignatureHeader: false,
+        hasTimestampHeader: false,
+        signatureLength: 0,
+        bodyLength: 0,
+      }),
+    );
+  });
+
   it('answers a PING with a PONG without calling onInteraction', async () => {
     const { rawPublicKeyHex, privateKey } = generateKeys();
     const onInteraction = vi.fn();

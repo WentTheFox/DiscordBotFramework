@@ -618,6 +618,25 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   one of the two near-simultaneous requests is the leading guess, not
   confirmed. Revisit if a bot sees a genuine (not just at portal-validation
   time) signature-verification failure rate on real traffic.
+  **This is exactly the scenario that motivated adding built-in
+  signature-rejection diagnostics**: HammerTimeBot saw ~19 real 401s in
+  production (mostly clustered at a deploy/restart window, some scattered
+  after) and had temporarily wrapped `handleWebhookInteractionRequest`
+  app-side in `webhook.ts` to log source IP/user-agent/header-presence/
+  lengths on rejection, specifically to classify "internet-scanner noise"
+  vs. "something that looks like real Discord traffic but is somehow
+  invalid" — every consuming bot behind a public endpoint hits this same
+  classification need, so it moved into the framework instead of staying
+  app-side. `resolveSourceIp()` checks `cf-connecting-ip`/`x-real-ip`/
+  `x-forwarded-for` in that order and is explicitly **not** used anywhere
+  security-sensitive (signature verification itself never trusts
+  client-supplied IP headers) — it's purely an operator-facing diagnostic,
+  hence living in a `debug`-level log alongside the existing `warn`, not
+  affecting verification/dispatch behavior. `WebhookInteractionRequest.headers`
+  is optional and generic (`Record<string, string | undefined>`, matching
+  Node's/Express's/Fastify's lowercase-key convention) rather than a specific
+  HTTP framework's request type, consistent with this module's existing
+  stance of not depending on one.
 - **Component registries only require `{ id, handle }`** — they deliberately
   do **not** standardize a `getDefinition`/`factory` shape for building the
   component's wire representation, because HammerTimeBot/Fantastick's

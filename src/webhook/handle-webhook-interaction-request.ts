@@ -9,6 +9,13 @@ export interface WebhookInteractionRequest {
   timestamp: string | undefined;
   /** The raw (unparsed) request body, exactly as received - required for signature verification. */
   rawBody: string | Buffer;
+  /**
+   * Request headers, lowercase-keyed (matches Node's `http.IncomingMessage`,
+   * Express, Fastify, ... convention). Optional - only used to enrich the
+   * diagnostic `debug` log emitted when signature verification fails,
+   * verification/dispatch behavior is identical either way.
+   */
+  headers?: Record<string, string | undefined>;
 }
 
 export interface WebhookInteractionResponse {
@@ -41,6 +48,23 @@ export interface HandleWebhookInteractionRequestOptions {
 }
 
 /**
+ * Best-effort source IP for the diagnostic log below - checks the headers a
+ * request sitting behind a reverse proxy (Cloudflare, nginx, ...) actually
+ * carries the real client IP in, since `req.socket.remoteAddress`-equivalent
+ * info is proxy-terminated and not available from headers/body alone. Not
+ * used for anything security-sensitive (signature verification never trusts
+ * client-supplied IP data) - purely to help a bot operator eyeball whether a
+ * batch of rejections looks like internet-scanner noise or something worth a
+ * closer look.
+ */
+function resolveSourceIp(headers: Record<string, string | undefined> | undefined): string | undefined {
+  if (!headers) {
+    return undefined;
+  }
+  return headers['cf-connecting-ip'] ?? headers['x-real-ip'] ?? headers['x-forwarded-for']?.split(',')[0]?.trim();
+}
+
+/**
  * Framework-agnostic core of an HTTP Interactions endpoint: verifies the
  * request's Ed25519 signature, answers Discord's PING (type 1) validation
  * handshake with PONG directly, and otherwise hands the parsed interaction to
@@ -49,6 +73,15 @@ export interface HandleWebhookInteractionRequestOptions {
  * `Request`/etc., so it can be wired into any HTTP layer a bot already uses -
  * this package doesn't otherwise depend on one, and picking one here would be
  * a bigger commitment than this function needs to make.
+ *
+ * On a signature-verification failure, logs a `debug`-level diagnostic
+ * (source IP, user-agent, whether the signature/timestamp headers were even
+ * present, signature/body length) alongside the existing `warn` - a public
+ * webhook endpoint draws routine internet-scanner noise as well as genuine
+ * misconfiguration, and this is what tells the two apart after the fact
+ * without every consuming bot re-implementing the same wrapper around this
+ * call. Requires `request.headers` (optional) to populate the IP/user-agent
+ * fields; omit it and those two just come back `undefined`.
  */
 export async function handleWebhookInteractionRequest(
   request: WebhookInteractionRequest,
@@ -64,6 +97,14 @@ export async function handleWebhookInteractionRequest(
   });
   if (!isValid) {
     logger.warn('Rejected webhook interaction request with invalid signature');
+    logger.debug('Webhook interaction signature-rejection diagnostics', {
+      sourceIp: resolveSourceIp(request.headers),
+      userAgent: request.headers?.['user-agent'],
+      hasSignatureHeader: request.signature !== undefined,
+      hasTimestampHeader: request.timestamp !== undefined,
+      signatureLength: request.signature?.length ?? 0,
+      bodyLength: Buffer.byteLength(request.rawBody),
+    });
     return { status: 401, body: { error: 'Invalid request signature' } };
   }
 

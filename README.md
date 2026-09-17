@@ -520,6 +520,7 @@ createServer(async (req, res) => {
       signature: req.headers['x-signature-ed25519'] as string,
       timestamp: req.headers['x-signature-timestamp'] as string,
       rawBody,
+      headers: req.headers as Record<string, string | undefined>, // optional - enriches the signature-rejection debug log
     },
     {
       publicKey: env.DISCORD_PUBLIC_KEY,
@@ -530,6 +531,17 @@ createServer(async (req, res) => {
   res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
 }).listen(3000);
 ```
+
+On a signature-verification failure, `handleWebhookInteractionRequest` logs a
+`debug`-level diagnostic alongside the existing `warn` - source IP (checking
+`cf-connecting-ip`/`x-real-ip`/`x-forwarded-for` in turn, for bots sitting
+behind a reverse proxy), user-agent, whether the signature/timestamp headers
+were present at all vs. present-but-wrong, and signature/body length. A
+public webhook endpoint draws routine internet-scanner noise as well as
+genuine misconfiguration; this is what tells the two apart after the fact,
+without every consuming bot re-implementing the same wrapper. Pass `headers`
+to populate it - omit it and the IP/user-agent fields just come back
+`undefined`.
 
 `createWebhookInteractionResponder` gives you the REST calls needed *after*
 that initial response — editing a deferred reply, sending a follow-up, or
