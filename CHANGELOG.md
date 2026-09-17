@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.4.0...v2.5.0) (2026-09-17)
+
+
+### Features
+
+* **webhook:** add experimental HTTP Interactions endpoint support ([db33599](https://github.com/WentTheFox/DiscordBotFramework/commit/db335999d51d968c1af520821ac40590e9605d39))
+
 # [2.4.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.3.0...v2.4.0) (2026-09-11)
 
 
