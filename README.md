@@ -540,12 +540,57 @@ const responder = createWebhookInteractionResponder({ rest, applicationId, inter
 await responder.editReply({ content: 'Done!' });
 ```
 
-**This is not a drop-in replacement for discord.js's `Interaction#reply()`/
-`editReply()`/`options.get*()` surface.** It's intentionally the thinner,
-already-validated half of that problem (signature verification, the PING
-handshake, and the plain REST calls) — see CLAUDE.md's `./webhook`
-design-decision entry for why a discord.js-`Interaction`-shaped compatibility
-adapter isn't built here yet.
+**Running existing gateway-shaped command handlers unmodified:**
+`createWebhookOnlyClient` builds a real discord.js `Client` that's fully
+authenticated for REST but never opens a gateway connection (`Client#login()`
+always does, with no way to opt out, so this sets `client.rest`'s token
+directly instead - both fully public API). `interactionFromWebhookPayload`
+then reconstructs a genuine discord.js `Interaction` instance from the raw
+payload, the same way discord.js's own gateway path does internally - so
+`.reply()`/`.deferReply()`/`.editReply()`/`.options.getString()` etc. all work
+exactly as they do today, and your existing `BotChatInputCommand`/
+`dispatchChatInputCommand`/`createInteractionRouter` code needs zero changes:
+
+```ts
+import { createWebhookOnlyClient, handleWebhookInteractionRequest, interactionFromWebhookPayload } from '@went.tf/discord-bot-framework/webhook';
+import { dispatchChatInputCommand } from '@went.tf/discord-bot-framework/interactions';
+
+const client = createWebhookOnlyClient({ token: env.DISCORD_BOT_TOKEN });
+
+// inside your HTTP handler, in place of the plain onInteraction above:
+onInteraction: async (data) => {
+  const interaction = interactionFromWebhookPayload(client, data);
+  if (interaction.isChatInputCommand()) {
+    await dispatchChatInputCommand(interaction, context, { commands: registry.byName, onError });
+    return; // .reply()/.deferReply() already sent the real response via REST
+  }
+  // ...similarly for dispatchComponent/dispatchModal/dispatchAutocomplete/dispatchContextMenu
+},
+```
+
+Two real gaps versus a gateway-delivered interaction, both from there being no
+populated gateway cache: `.guild` is always `null`, and `.channel` is `null`
+unless you pre-cache the interaction's inline partial channel data yourself.
+`.member` degrades gracefully instead (falls back to the raw
+`APIInteractionGuildMember` object), so plain property reads keep working.
+See `interactionFromWebhookPayload`'s doc comment for the full detail -
+runtime-verified in `interaction-from-webhook-payload.test.ts` (including the
+two discord.js interaction classes with `private` constructors,
+`ButtonInteraction`/`ModalSubmitInteraction`, which still construct correctly
+through this bridge).
+
+**One thing this hasn't verified**, because it needs live Discord traffic,
+not just source-reading: when a handler's `.reply()`/`.deferReply()` call
+already sent the real response via REST mid-handler, what your `onInteraction`
+callback should still return as the literal HTTP response to Discord's
+original webhook POST. `handleWebhookInteractionRequest` sends a bare `{}`
+with a 200 if `onInteraction` returns nothing, on the assumption (backed by
+discord.js's `InteractionResponses` source - every reply method calls the same
+`Routes.interactionCallback()` REST route regardless of gateway vs. webhook
+delivery, so the mechanism is provably delivery-agnostic on Discord's side)
+that this is fine, but that assumption is unconfirmed against a real
+registered endpoint. See CLAUDE.md's `./webhook` design-decision entry before
+relying on this in production.
 
 ### `@went.tf/discord-bot-framework/dev`
 

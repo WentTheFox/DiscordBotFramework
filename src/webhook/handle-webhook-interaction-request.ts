@@ -13,7 +13,7 @@ export interface WebhookInteractionRequest {
 
 export interface WebhookInteractionResponse {
   status: number;
-  body: APIInteractionResponse | { error: string };
+  body: APIInteractionResponse | { error: string } | Record<string, never>;
 }
 
 export interface HandleWebhookInteractionRequestOptions {
@@ -26,8 +26,18 @@ export interface HandleWebhookInteractionRequestOptions {
    * Discord as the interaction's initial response (e.g. a `CHANNEL_MESSAGE_WITH_SOURCE`
    * or a `DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE` to be followed up on later via
    * `createWebhookInteractionResponder`).
+   *
+   * If you instead bridge into a real discord.js interaction via
+   * `interactionFromWebhookPayload` and dispatch it through
+   * `dispatchChatInputCommand`/`createInteractionRouter`, the handler's own
+   * `.reply()`/`.deferReply()` call already sends the actual response via
+   * REST before this resolves - return nothing (`void`) in that case, and a
+   * generic 200 ack is sent back to Discord's original request instead.
+   * **This dual response path (a real REST call already made mid-handler,
+   * plus a separate bare HTTP ack to the original webhook POST) is unverified
+   * against live Discord traffic** - see this module's CLAUDE.md entry.
    */
-  onInteraction: (interaction: APIInteraction) => APIInteractionResponse | Promise<APIInteractionResponse>;
+  onInteraction: (interaction: APIInteraction) => APIInteractionResponse | void | Promise<APIInteractionResponse | void>;
 }
 
 /**
@@ -71,7 +81,7 @@ export async function handleWebhookInteractionRequest(
 
   try {
     const body = await onInteraction(interaction);
-    return { status: 200, body };
+    return { status: 200, body: body ?? {} };
   } catch (e) {
     logger.error('Error while handling webhook interaction', e);
     return { status: 500, body: { error: 'Internal error' } };

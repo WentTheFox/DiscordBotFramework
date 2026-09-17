@@ -555,6 +555,58 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   dependency needed, matching the discord-webhook pino transport and
   `createHandlerWatcher`'s native-`fs.watch` precedent for preferring a
   native API over a new dependency when one suffices.
+  **Superseded the day after the first `./webhook` release: `createWebhookOnlyClient`
+  + `interactionFromWebhookPayload` bridge into real discord.js `Interaction`
+  instances instead of a hand-rolled compatibility adapter.** HammerTimeBot
+  source-traced discord.js@14.26.x's own `InteractionCreateAction.handle()`
+  (`client.actions` is `private: unknown` in discord.js's own typings, zero
+  semver protection, so reaching into it directly was rejected) and found it
+  does almost nothing beyond `new InteractionClass(client, data)` — and that
+  every concrete `Interaction` subclass has a real `(client, data)`
+  constructor. Verified independently against the actual `.js` source (not
+  just `.d.ts`) before committing to this: `BaseInteraction`'s constructor is
+  `protected` (blocks external construction, not subclass `super()`), but
+  `ButtonInteraction`/`ModalSubmitInteraction`/the 5 select-menu classes each
+  redeclare their own constructor, and it's fully `private` for the first two
+  (blocks even subclassing) with a narrower `data` parameter type that isn't
+  part of discord.js's public export surface to reference by name anyway.
+  Rather than two different mechanisms (a `super()`-forwarding subclass for
+  the `protected` ones, a cast for the `private` ones), `constructInteraction()`
+  uses one uniform cast-based construction for all twelve leaf classes this
+  needs — both keywords are pure TypeScript access control, erased in the
+  compiled `.js`, so this reaches the exact same runtime constructor discord.js's
+  own gateway path calls, just through a type cast instead of module-internal
+  privilege (there being no way to reference a type discord.js itself doesn't
+  export rules out a fully-typed cast anyway). `createWebhookInteractionResponder`
+  stays — it's still what a bot working directly against raw `APIInteraction`
+  data without this bridge needs — but it's no longer the primary recommended
+  path for a bot with existing gateway-shaped handler code; the bridge is.
+  **`.guild` is always `null` and `.channel` is `null` unless the caller
+  pre-caches partial channel data manually** — both are gateway-cache-backed
+  getters with no populated cache in webhook mode, and discord.js's own
+  channel pre-caching step (`Action#getChannel`) is a private internal, not
+  reusable from outside. Verified acceptable to ship without addressing this
+  first (rather than porting `getChannel`'s logic): HammerTimeBot grepped all
+  16 command files + 1 component handler + `interaction-reply.ts`/
+  `reply-with-syntax.ts` and found zero usages of either property — the only
+  usage found was a non-critical logging line. `.member` degrades gracefully
+  instead of breaking (falls back to the raw `APIInteractionGuildMember` POJO
+  when `.guild` is `null`), confirmed by tracing `BaseInteraction.js`.
+  **One thing this still hasn't verified, and can't from source-reading
+  alone: what `onInteraction` should return as the literal HTTP response to
+  Discord's original webhook POST once a handler's `.reply()`/`.deferReply()`
+  has already sent the real response via a separate REST call mid-handler.**
+  `handleWebhookInteractionRequest` now accepts `onInteraction` returning
+  `void` and sends a bare `{}`/200 in that case, on the assumption (backed by
+  `InteractionResponses.js`: every reply method calls the same
+  `Routes.interactionCallback()` REST route regardless of delivery mechanism,
+  with no `client.application`/gateway dependency, so the mechanism is
+  provably delivery-agnostic on Discord's server side) that this is fine —
+  but this specific assumption needs a real registered Interactions Endpoint
+  to confirm, not just doc/source-reading, and hasn't been confirmed yet.
+  Whoever validates this next should update this entry with the result either
+  way, since it's the one remaining thing standing between `./webhook` and
+  dropping "experimental" from its README heading.
 - **Component registries only require `{ id, handle }`** — they deliberately
   do **not** standardize a `getDefinition`/`factory` shape for building the
   component's wire representation, because HammerTimeBot/Fantastick's
@@ -631,6 +683,7 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 | `src/dev/create-handler-watcher.ts` | New for this package, no direct bot precedent (none of the three source bots had hot-reload) |
 | `src/dev/create-source-reloader.ts`, `reload-loader.ts` | New for this package; built for Fantastick's `DEV_WATCH` mode after `createHandlerWatcher`'s single-file reload missed changes to shared modal-handler/util files |
 | `src/webhook/` | New for this package, no direct bot precedent (none of the three source bots use HTTP Interactions) — added for HammerTimeBot's in-progress gateway-to-webhook migration on its `migrate-discord-bot-framework` branch |
+| `src/webhook/create-webhook-only-client.ts`, `interaction-from-webhook-payload.ts` | New; the discord.js-`Interaction`-bridging approach HammerTimeBot found by source-tracing `discord.js@14.26.x`'s own `InteractionCreateAction.handle()`, in place of a hand-rolled compatibility adapter |
 
 ## Conventions
 
