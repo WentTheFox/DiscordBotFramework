@@ -1,3 +1,10 @@
+# [2.7.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.6.0...v2.7.0) (2026-09-17)
+
+
+### Features
+
+* **webhook:** log diagnostics on signature-rejection ([7176e5c](https://github.com/WentTheFox/DiscordBotFramework/commit/7176e5cca6b716ea08409fd8c8808f3dff93c807))
+
 # [2.6.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.5.0...v2.6.0) (2026-09-17)
 
 
