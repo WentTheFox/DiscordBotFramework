@@ -480,14 +480,16 @@ process is never restarted. Fall back to a real restart for those, and for
 anything that needs `beforeSpawn`'s one-time setup (e.g. slash command
 registration) to re-run.
 
-### `@went.tf/discord-bot-framework/webhook` (experimental)
+### `@went.tf/discord-bot-framework/webhook`
 
-> **Experimental, unvalidated against a real bot.** Unlike every other
-> subpath in this package, `./webhook` hasn't yet been proven against a real
-> migration — see the scope note at the end of this section and CLAUDE.md's
-> `./webhook` design-decision entry. The API may change in a minor/patch
-> release until that validation happens, despite semver-major otherwise being
-> reserved for breaking changes in this package.
+> **Validated against a real bot.** HammerTimeBot ran this against a real
+> registered Discord Interactions Endpoint URL (portal PING validation, then
+> a live `/unix` slash command end-to-end) on its `migrate-discord-bot-framework`
+> branch — signature verification, PING/PONG, the discord.js-`Interaction`
+> bridge, and the REST-callback-based ack path all confirmed working with
+> zero modifications needed to its 16 command files + component handler. See
+> CLAUDE.md's `./webhook` design-decision entry for the one open item that
+> validation surfaced (a Discord portal-side double-PING quirk, not blocking).
 
 An alternate, independent transport alongside `./client`'s gateway-based
 `createBotClient`/`createShardManager`, for bots that want to receive
@@ -579,18 +581,15 @@ two discord.js interaction classes with `private` constructors,
 `ButtonInteraction`/`ModalSubmitInteraction`, which still construct correctly
 through this bridge).
 
-**One thing this hasn't verified**, because it needs live Discord traffic,
-not just source-reading: when a handler's `.reply()`/`.deferReply()` call
-already sent the real response via REST mid-handler, what your `onInteraction`
-callback should still return as the literal HTTP response to Discord's
-original webhook POST. `handleWebhookInteractionRequest` sends a bare `{}`
-with a 200 if `onInteraction` returns nothing, on the assumption (backed by
-discord.js's `InteractionResponses` source - every reply method calls the same
-`Routes.interactionCallback()` REST route regardless of gateway vs. webhook
-delivery, so the mechanism is provably delivery-agnostic on Discord's side)
-that this is fine, but that assumption is unconfirmed against a real
-registered endpoint. See CLAUDE.md's `./webhook` design-decision entry before
-relying on this in production.
+**The REST-callback-based ack path is confirmed working against live Discord
+traffic**, not just source-reading: when a handler's `.reply()`/`.deferReply()`
+call already sent the real response via REST mid-handler,
+`handleWebhookInteractionRequest` sends a bare `{}` with a 200 as the literal
+HTTP response to Discord's original webhook POST if `onInteraction` returns
+nothing - HammerTimeBot confirmed this is accepted end-to-end via a real
+`/unix` slash command run through a registered Interactions Endpoint URL. See
+CLAUDE.md's `./webhook` design-decision entry for that validation's one open
+item (a portal-side double-PING quirk, not blocking).
 
 ### `@went.tf/discord-bot-framework/dev`
 

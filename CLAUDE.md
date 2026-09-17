@@ -592,21 +592,32 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   usage found was a non-critical logging line. `.member` degrades gracefully
   instead of breaking (falls back to the raw `APIInteractionGuildMember` POJO
   when `.guild` is `null`), confirmed by tracing `BaseInteraction.js`.
-  **One thing this still hasn't verified, and can't from source-reading
-  alone: what `onInteraction` should return as the literal HTTP response to
-  Discord's original webhook POST once a handler's `.reply()`/`.deferReply()`
-  has already sent the real response via a separate REST call mid-handler.**
-  `handleWebhookInteractionRequest` now accepts `onInteraction` returning
-  `void` and sends a bare `{}`/200 in that case, on the assumption (backed by
-  `InteractionResponses.js`: every reply method calls the same
-  `Routes.interactionCallback()` REST route regardless of delivery mechanism,
-  with no `client.application`/gateway dependency, so the mechanism is
-  provably delivery-agnostic on Discord's server side) that this is fine —
-  but this specific assumption needs a real registered Interactions Endpoint
-  to confirm, not just doc/source-reading, and hasn't been confirmed yet.
-  Whoever validates this next should update this entry with the result either
-  way, since it's the one remaining thing standing between `./webhook` and
-  dropping "experimental" from its README heading.
+  **Resolved by live validation, not just source-reading: `onInteraction`
+  returning `void` (a bare `{}`/200 ack to Discord's original webhook POST,
+  once a handler's `.reply()`/`.deferReply()` already sent the real response
+  via a separate REST call mid-handler) works against real Discord traffic.**
+  HammerTimeBot registered a real Interactions Endpoint URL (dev machine
+  behind Cloudflare → home router NAT → Nginx Proxy Manager) on its
+  `migrate-discord-bot-framework` branch and ran an actual `/unix` slash
+  command through the full pipeline end-to-end — signature verification,
+  `interactionFromWebhookPayload`, `dispatchChatInputCommand` running its
+  real unmodified handler, the reply landing correctly in Discord, and its
+  REST-based post-reply telemetry (`interaction.fetchReply()`/`.editReply()`,
+  same calls as gateway mode) all succeeding on the first attempt, for all
+  16 command files + 1 component handler with zero code changes needed. This
+  is what `./webhook`'s "validated" README callout (no longer "experimental")
+  is based on — not source-reading alone.
+  **One quirk this validation surfaced, unexplained but non-blocking:**
+  during Discord developer portal's PING-validation save of the endpoint
+  URL, Discord sent two back-to-back PING requests (~180ms apart, different
+  interaction IDs), and one of the two failed `verifyInteractionRequest`
+  while the other passed — the save still succeeded (only one valid PING
+  response is required), and it did not recur on the subsequent real
+  interaction traffic. Root cause wasn't dug into (didn't block anything real
+  found so far); a body-mangling issue in the Cloudflare/NPM proxy chain on
+  one of the two near-simultaneous requests is the leading guess, not
+  confirmed. Revisit if a bot sees a genuine (not just at portal-validation
+  time) signature-verification failure rate on real traffic.
 - **Component registries only require `{ id, handle }`** — they deliberately
   do **not** standardize a `getDefinition`/`factory` shape for building the
   component's wire representation, because HammerTimeBot/Fantastick's
