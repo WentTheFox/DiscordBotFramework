@@ -637,6 +637,32 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   Node's/Express's/Fastify's lowercase-key convention) rather than a specific
   HTTP framework's request type, consistent with this module's existing
   stance of not depending on one.
+  **The default diagnostic's metadata turned out to not be enough on its
+  own — `verboseSignatureDiagnostics` (opt-in, off by default) exists
+  because of a real follow-up investigation, not speculatively.**
+  HammerTimeBot's 2.7.0 diagnostics confirmed their real production 401s
+  were genuine Discord traffic (`Discord-Interactions/1.0` user-agent,
+  Google Cloud source IPs, both headers present, correct signature length) —
+  but that metadata alone couldn't explain *why* a signature that looks
+  structurally correct still fails verification, which needs the actual
+  signature/timestamp values and body content to investigate. One finding
+  from their temporary app-level version, worth preserving here even though
+  it's not fully explained yet: every failure observed had `bodyLength`
+  exactly 753 bytes, matching Discord's own PING-type validation payload
+  size, never a real command (1800–5300+ bytes in their logs) — so this
+  looks specific to Discord's periodic endpoint health-check pings, not user
+  interactions, reassuring for user impact but still an open root cause.
+  `verboseSignatureDiagnostics` adds the exact `signature`/`timestamp`
+  header values (not sensitive on their own — an Ed25519 signature and a
+  unix timestamp, neither reveals the private key or user data), a SHA-256
+  hash of the raw body (for correlating/deduplicating failures without
+  logging content), and - only if the body happens to parse as JSON - just
+  its `type`/`id` fields. **Deliberately stops there and does not log the
+  parsed body beyond those two fields, let alone the raw body** — the
+  explicit line HammerTimeBot drew in their own temporary version too,
+  keeping command names/option values/user data out of logs even in verbose
+  mode, so there's no separate "now turn this back off before it leaks
+  something" concern once enabled for an investigation.
 - **Component registries only require `{ id, handle }`** — they deliberately
   do **not** standardize a `getDefinition`/`factory` shape for building the
   component's wire representation, because HammerTimeBot/Fantastick's

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { APIInteraction, APIInteractionResponse, InteractionResponseType, InteractionType } from 'discord-api-types/v10';
 import { NestableLogger } from '../logger/types.js';
 import { verifyInteractionRequest } from './verify-interaction-request.js';
@@ -45,6 +46,18 @@ export interface HandleWebhookInteractionRequestOptions {
    * against live Discord traffic** - see this module's CLAUDE.md entry.
    */
   onInteraction: (interaction: APIInteraction) => APIInteractionResponse | void | Promise<APIInteractionResponse | void>;
+  /**
+   * Opt-in, off by default. Adds the exact `signature`/`timestamp` header
+   * values, a SHA-256 hash of the raw body (not the body itself), and - only
+   * if the body happens to parse as JSON - just its `type`/`id` fields, to
+   * the signature-rejection diagnostic. For diagnosing a genuine crypto-level
+   * mismatch (e.g. a proxy subtly altering the body/headers in flight) where
+   * the default diagnostic's metadata (source IP, user-agent, lengths) isn't
+   * enough - deliberately excludes body content beyond `type`/`id`, so it's
+   * safe to enable without logging user-submitted interaction data (command
+   * option values, etc.).
+   */
+  verboseSignatureDiagnostics?: boolean;
 }
 
 /**
@@ -62,6 +75,32 @@ function resolveSourceIp(headers: Record<string, string | undefined> | undefined
     return undefined;
   }
   return headers['cf-connecting-ip'] ?? headers['x-real-ip'] ?? headers['x-forwarded-for']?.split(',')[0]?.trim();
+}
+
+/**
+ * Extra fields for `verboseSignatureDiagnostics` - the exact signature/
+ * timestamp values (not sensitive: an Ed25519 signature and a unix
+ * timestamp, neither reveals the private key or any user data) and a body
+ * hash for correlating/deduplicating failures, plus `type`/`id` if the body
+ * happens to be parseable JSON (garbage/scanner traffic usually isn't).
+ * Deliberately stops there - never logs the parsed body beyond those two
+ * fields, let alone the raw body itself.
+ */
+function verboseSignatureDiagnostics(request: WebhookInteractionRequest): Record<string, unknown> {
+  const bodyHash = createHash('sha256').update(request.rawBody).digest('hex');
+  let parsed: { type?: unknown; id?: unknown } | undefined;
+  try {
+    parsed = JSON.parse(request.rawBody.toString()) as { type?: unknown; id?: unknown };
+  } catch {
+    parsed = undefined;
+  }
+  return {
+    signature: request.signature,
+    timestamp: request.timestamp,
+    bodyHash,
+    bodyType: parsed?.type,
+    bodyId: parsed?.id,
+  };
 }
 
 /**
@@ -87,7 +126,7 @@ export async function handleWebhookInteractionRequest(
   request: WebhookInteractionRequest,
   options: HandleWebhookInteractionRequestOptions,
 ): Promise<WebhookInteractionResponse> {
-  const { publicKey, logger, onInteraction } = options;
+  const { publicKey, logger, onInteraction, verboseSignatureDiagnostics: verbose = false } = options;
 
   const isValid = verifyInteractionRequest({
     publicKey,
@@ -104,6 +143,7 @@ export async function handleWebhookInteractionRequest(
       hasTimestampHeader: request.timestamp !== undefined,
       signatureLength: request.signature?.length ?? 0,
       bodyLength: Buffer.byteLength(request.rawBody),
+      ...(verbose ? verboseSignatureDiagnostics(request) : undefined),
     });
     return { status: 401, body: { error: 'Invalid request signature' } };
   }

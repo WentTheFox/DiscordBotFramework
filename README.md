@@ -543,6 +543,23 @@ without every consuming bot re-implementing the same wrapper. Pass `headers`
 to populate it - omit it and the IP/user-agent fields just come back
 `undefined`.
 
+If that metadata narrows it down to "looks like genuine Discord traffic, but
+still fails verification" (rather than scanner noise), pass
+`verboseSignatureDiagnostics: true` to also log the exact `signature`/
+`timestamp` header values, a SHA-256 hash of the raw body, and - only if the
+body happens to parse as JSON - just its `type`/`id` fields:
+
+```ts
+await handleWebhookInteractionRequest(
+  { signature, timestamp, rawBody, headers },
+  { publicKey: env.DISCORD_PUBLIC_KEY, logger, onInteraction, verboseSignatureDiagnostics: env.WEBHOOK_VERBOSE_DIAGNOSTICS },
+);
+```
+
+Off by default, and deliberately stops at those fields - it never logs the
+parsed interaction body itself (command names, option values, user data), so
+it's safe to leave on for an investigation without a separate opt-out plan.
+
 `createWebhookInteractionResponder` gives you the REST calls needed *after*
 that initial response — editing a deferred reply, sending a follow-up, or
 deleting the reply — built on `@discordjs/rest` (already a peer dependency):

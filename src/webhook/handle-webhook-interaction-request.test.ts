@@ -1,4 +1,4 @@
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { InteractionResponseType, InteractionType } from 'discord-api-types/v10';
 import { describe, expect, it, vi } from 'vitest';
 import { DevNullLogger } from '../logger/dev-null-logger.js';
@@ -82,6 +82,63 @@ describe('handleWebhookInteractionRequest', () => {
         signatureLength: 0,
         bodyLength: 0,
       }),
+    );
+  });
+
+  it('omits signature/timestamp/body content from diagnostics by default', async () => {
+    const { rawPublicKeyHex } = generateKeys();
+    const logger = new DevNullLogger();
+    const debugSpy = vi.spyOn(logger, 'debug');
+
+    await handleWebhookInteractionRequest(
+      { signature: 'not-valid', timestamp: '1700000000', rawBody: '{"type":1,"id":"999"}' },
+      { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn() },
+    );
+
+    const [, diagnostics] = debugSpy.mock.calls[0] as [string, Record<string, unknown>];
+    expect(diagnostics).not.toHaveProperty('signature');
+    expect(diagnostics).not.toHaveProperty('timestamp');
+    expect(diagnostics).not.toHaveProperty('bodyHash');
+    expect(diagnostics).not.toHaveProperty('bodyType');
+    expect(diagnostics).not.toHaveProperty('bodyId');
+  });
+
+  it('includes signature/timestamp/bodyHash/type/id when verboseSignatureDiagnostics is enabled', async () => {
+    const { rawPublicKeyHex } = generateKeys();
+    const logger = new DevNullLogger();
+    const debugSpy = vi.spyOn(logger, 'debug');
+    const rawBody = '{"type":1,"id":"999"}';
+
+    await handleWebhookInteractionRequest(
+      { signature: 'not-valid', timestamp: '1700000000', rawBody },
+      { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn(), verboseSignatureDiagnostics: true },
+    );
+
+    expect(debugSpy).toHaveBeenCalledWith(
+      'Webhook interaction signature-rejection diagnostics',
+      expect.objectContaining({
+        signature: 'not-valid',
+        timestamp: '1700000000',
+        bodyHash: createHash('sha256').update(rawBody).digest('hex'),
+        bodyType: 1,
+        bodyId: '999',
+      }),
+    );
+  });
+
+  it('leaves bodyType/bodyId undefined for verbose diagnostics when the body is not JSON', async () => {
+    const { rawPublicKeyHex } = generateKeys();
+    const logger = new DevNullLogger();
+    const debugSpy = vi.spyOn(logger, 'debug');
+
+    await handleWebhookInteractionRequest(
+      { signature: 'not-valid', timestamp: '1700000000', rawBody: 'not json' },
+      { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn(), verboseSignatureDiagnostics: true },
+    );
+
+    expect(debugSpy).toHaveBeenCalledWith(
+      'Webhook interaction signature-rejection diagnostics',
+      expect.objectContaining({ bodyType: undefined, bodyId: undefined }),
     );
   });
 
