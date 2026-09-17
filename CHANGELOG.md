@@ -1,3 +1,10 @@
+# [2.8.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.7.0...v2.8.0) (2026-09-17)
+
+
+### Features
+
+* **webhook:** add opt-in verbose signature-rejection diagnostics ([e7c3f34](https://github.com/WentTheFox/DiscordBotFramework/commit/e7c3f34995ea831b786ea0cbddd76382abd8ace5))
+
 # [2.7.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.6.0...v2.7.0) (2026-09-17)
 
 
