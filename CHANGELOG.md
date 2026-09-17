@@ -1,3 +1,10 @@
+# [2.6.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.5.0...v2.6.0) (2026-09-17)
+
+
+### Features
+
+* **webhook:** bridge into real discord.js Interaction instances ([2920492](https://github.com/WentTheFox/DiscordBotFramework/commit/2920492ab3cdbe70366da632c86d090f4b6eaaa0))
+
 # [2.5.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.4.0...v2.5.0) (2026-09-17)
 
 
