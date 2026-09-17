@@ -480,6 +480,73 @@ process is never restarted. Fall back to a real restart for those, and for
 anything that needs `beforeSpawn`'s one-time setup (e.g. slash command
 registration) to re-run.
 
+### `@went.tf/discord-bot-framework/webhook` (experimental)
+
+> **Experimental, unvalidated against a real bot.** Unlike every other
+> subpath in this package, `./webhook` hasn't yet been proven against a real
+> migration — see the scope note at the end of this section and CLAUDE.md's
+> `./webhook` design-decision entry. The API may change in a minor/patch
+> release until that validation happens, despite semver-major otherwise being
+> reserved for breaking changes in this package.
+
+An alternate, independent transport alongside `./client`'s gateway-based
+`createBotClient`/`createShardManager`, for bots that want to receive
+interactions over an HTTP Interactions Endpoint instead of holding a
+WebSocket open. As with `createBotClient`/`createShardManager`, this doesn't
+unify with the gateway path behind one entry point — pick one transport per
+bot and use its functions directly.
+
+`verifyInteractionRequest` checks a request's `X-Signature-Ed25519`/
+`X-Signature-Timestamp` headers against your application's public key, using
+Node's native `crypto` module (no `tweetnacl`/`discord-interactions`
+dependency needed). `handleWebhookInteractionRequest` wraps that plus
+Discord's PING→PONG endpoint-validation handshake around your own handler,
+taking/returning plain data so it can be wired into any HTTP framework (or
+none):
+
+```ts
+import { handleWebhookInteractionRequest } from '@went.tf/discord-bot-framework/webhook';
+import { createServer } from 'node:http';
+
+createServer(async (req, res) => {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const rawBody = Buffer.concat(chunks);
+
+  const { status, body } = await handleWebhookInteractionRequest(
+    {
+      signature: req.headers['x-signature-ed25519'] as string,
+      timestamp: req.headers['x-signature-timestamp'] as string,
+      rawBody,
+    },
+    {
+      publicKey: env.DISCORD_PUBLIC_KEY,
+      logger,
+      onInteraction: (interaction) => handleInteraction(interaction), // bot-side: build an APIInteractionResponse
+    },
+  );
+  res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(body));
+}).listen(3000);
+```
+
+`createWebhookInteractionResponder` gives you the REST calls needed *after*
+that initial response — editing a deferred reply, sending a follow-up, or
+deleting the reply — built on `@discordjs/rest` (already a peer dependency):
+
+```ts
+import { createWebhookInteractionResponder } from '@went.tf/discord-bot-framework/webhook';
+
+const responder = createWebhookInteractionResponder({ rest, applicationId, interactionToken: interaction.token });
+await responder.editReply({ content: 'Done!' });
+```
+
+**This is not a drop-in replacement for discord.js's `Interaction#reply()`/
+`editReply()`/`options.get*()` surface.** It's intentionally the thinner,
+already-validated half of that problem (signature verification, the PING
+handshake, and the plain REST calls) — see CLAUDE.md's `./webhook`
+design-decision entry for why a discord.js-`Interaction`-shaped compatibility
+adapter isn't built here yet.
+
 ### `@went.tf/discord-bot-framework/dev`
 
 Live-reloads compiled command/interaction handler *implementations* during

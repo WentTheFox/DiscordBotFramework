@@ -48,6 +48,10 @@
       "types": "./build/client/index.d.ts",
       "default": "./build/client/index.js"
     },
+    "./webhook": {
+      "types": "./build/webhook/index.d.ts",
+      "default": "./build/webhook/index.js"
+    },
     "./dev": {
       "types": "./build/dev/index.d.ts",
       "default": "./build/dev/index.js"

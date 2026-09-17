@@ -512,6 +512,49 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   performed before ever touching the underlying pino instance, not implemented via
   pino's own numeric `level` threshold — pino has one threshold, not an arbitrary
   per-method mute set, so this couldn't be expressed as native pino config.
+- **`./webhook` (HTTP Interactions Endpoint support) is a third, independent
+  transport alongside `createBotClient`/`createShardManager`, not a unifying
+  layer over them** — same reasoning as why those two don't share an entry
+  point: gateway-`Client` login and a signed-webhook HTTP handler are
+  structurally different enough that forcing one API over both would hide
+  two unrelated code paths behind an `if`. Added in response to HammerTimeBot
+  wanting to drop its gateway connection entirely (a shard-reconnect forcing
+  a delayed guild-cache resync was implicated in a real memory-spike incident
+  on hammertime.vps) in favor of Discord POSTing interactions to an HTTP
+  endpoint instead.
+  **Deliberately scoped to only the two pieces that don't require guessing at
+  an unvalidated shape**: `verifyInteractionRequest` (Ed25519 signature check)
+  and `handleWebhookInteractionRequest` (wraps that plus Discord's PING→PONG
+  endpoint-validation handshake around a bot-supplied `onInteraction`
+  callback, taking/returning plain data — no HTTP-framework dependency
+  chosen, matching every other module's stance on not picking one) are
+  self-contained and low-risk. `createWebhookInteractionResponder` covers the
+  REST calls needed *after* the initial response (`editReply`/`followUp`/
+  `deleteReply`, built on `@discordjs/rest` — already a peer dependency, same
+  `REST` client `createCommandRegistrar` uses) — but **does not** attempt to
+  reproduce discord.js's `Interaction#reply()`/`editReply()`/`options.get*()`
+  shape closely enough for existing gateway-based handler code (HammerTimeBot
+  flagged ~54 `options.get*` call-sites, ~10 `reply()`, ~8 `editReply()`
+  across 16 command files + 1 component handler) to run unmodified against
+  it. Building that compatibility shim now, without a real migration to
+  validate the shape against, would repeat the exact mistake this repo's
+  design decisions elsewhere explicitly avoid — see `src/utils/filesystem`
+  (not extracted until Fantastick actually migrates) and the `RegistryName`
+  widening gotcha (only caught by a real Fantastick migration, not this
+  package's own unit tests). **Do not build a discord.js-`Interaction`-shaped
+  adapter speculatively** — wait for HammerTimeBot's actual
+  `migrate-discord-bot-framework` branch to attempt wiring its real command
+  handlers against `createWebhookInteractionResponder` + raw
+  `discord-api-types` `APIInteraction` data first, the same way the
+  `commands.json` redesign was validated against a full Fantastick migration
+  before being committed here.
+  Ed25519 verification uses Node's native `crypto` module (`createPublicKey`/
+  `verify`, wrapping Discord's raw 32-byte hex public key in the fixed DER
+  SPKI prefix `302a300506032b6570032100` since `createPublicKey` has no raw-key
+  input format) instead of `tweetnacl`/`discord-interactions` — no new
+  dependency needed, matching the discord-webhook pino transport and
+  `createHandlerWatcher`'s native-`fs.watch` precedent for preferring a
+  native API over a new dependency when one suffices.
 - **Component registries only require `{ id, handle }`** — they deliberately
   do **not** standardize a `getDefinition`/`factory` shape for building the
   component's wire representation, because HammerTimeBot/Fantastick's
@@ -587,6 +630,7 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
 | `src/i18n/create-i18n-initializer.ts` | `HammerTimeBot/src/constants/locales.ts` `initI18next` |
 | `src/dev/create-handler-watcher.ts` | New for this package, no direct bot precedent (none of the three source bots had hot-reload) |
 | `src/dev/create-source-reloader.ts`, `reload-loader.ts` | New for this package; built for Fantastick's `DEV_WATCH` mode after `createHandlerWatcher`'s single-file reload missed changes to shared modal-handler/util files |
+| `src/webhook/` | New for this package, no direct bot precedent (none of the three source bots use HTTP Interactions) — added for HammerTimeBot's in-progress gateway-to-webhook migration on its `migrate-discord-bot-framework` branch |
 
 ## Conventions
 
