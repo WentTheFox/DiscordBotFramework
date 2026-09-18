@@ -38,16 +38,23 @@ describe('createHandlerWatcher', () => {
   });
 
   it('coalesces rapid writes to the same file into a single call', async () => {
+    // Wider debounce window than the other tests here (real inotify/fs-event delivery, not fake
+    // timers - see the file-level comment): 3 writes have to land inside one debounce window, and
+    // at DEBOUNCE_MS=50 the ~17ms gaps between them left barely any margin for OS/scheduler jitter
+    // on a loaded CI runner, occasionally letting the debounce fire between writes (2 calls instead
+    // of 1) even though the debounce logic itself is correct. Scoped to just this test so the rest
+    // of the suite stays fast.
+    const COALESCE_DEBOUNCE_MS = 300;
     const onChange = vi.fn();
-    watcher = createHandlerWatcher({ paths: [dir], onChange, debounceMs: DEBOUNCE_MS });
+    watcher = createHandlerWatcher({ paths: [dir], onChange, debounceMs: COALESCE_DEBOUNCE_MS });
 
     const filePath = join(dir, 'ping.js');
     await writeFile(filePath, 'export default {} // 1');
-    await settle(DEBOUNCE_MS / 3);
+    await settle(COALESCE_DEBOUNCE_MS / 3);
     await writeFile(filePath, 'export default {} // 2');
-    await settle(DEBOUNCE_MS / 3);
+    await settle(COALESCE_DEBOUNCE_MS / 3);
     await writeFile(filePath, 'export default {} // 3');
-    await settle(DEBOUNCE_MS * 4);
+    await settle(COALESCE_DEBOUNCE_MS * 4);
 
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange).toHaveBeenCalledWith(filePath);
