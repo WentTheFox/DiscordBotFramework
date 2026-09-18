@@ -1,3 +1,10 @@
+# [2.10.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.9.1...v2.10.0) (2026-09-18)
+
+
+### Features
+
+* **webhook:** mute logging for Discord's own signature-conformance check ([87d029e](https://github.com/WentTheFox/DiscordBotFramework/commit/87d029e31189775be76822849bbd3397d25235b6))
+
 ## [2.9.1](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.9.0...v2.9.1) (2026-09-18)
 
 
