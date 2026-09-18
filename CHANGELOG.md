@@ -1,3 +1,10 @@
+# [2.9.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.8.0...v2.9.0) (2026-09-18)
+
+
+### Features
+
+* **api-client:** add timeoutMs support ([c800f80](https://github.com/WentTheFox/DiscordBotFramework/commit/c800f80f37e90eb2719c9dc8016b825828405b62))
+
 # [2.8.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.7.0...v2.8.0) (2026-09-17)
 
 
