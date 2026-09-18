@@ -114,4 +114,75 @@ describe('ApiClient', () => {
       expect(fetchImpl).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('timeoutMs', () => {
+    it('does not pass a signal when no timeout is set', async () => {
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+      const client = new ApiClient(new DevNullLogger(), { baseUrl: 'https://example.com' }, fetchImpl);
+
+      await client.request({ path: '/thing' });
+
+      const [, init] = fetchImpl.mock.calls[0];
+      expect(init.signal).toBeUndefined();
+    });
+
+    it('uses the client-level default when the request sets none', async () => {
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        timeoutMs: 1000,
+      }, fetchImpl);
+
+      await client.request({ path: '/thing' });
+
+      expect(timeoutSpy).toHaveBeenCalledWith(1000);
+    });
+
+    it('lets a per-request timeoutMs override the client-level default', async () => {
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        timeoutMs: 1000,
+      }, fetchImpl);
+
+      await client.request({ path: '/thing', timeoutMs: 2000 });
+
+      expect(timeoutSpy).toHaveBeenCalledWith(2000);
+    });
+
+    it('aborts and throws ApiHttpException when a request outlives timeoutMs', async () => {
+      const fetchImpl = vi.fn().mockImplementation((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        timeoutMs: 5,
+      }, fetchImpl);
+
+      await expect(client.request({ path: '/thing' })).rejects.toMatchObject({
+        status: 500,
+        message: expect.stringContaining('Request timed out after 5ms'),
+      });
+    });
+
+    it('composes with retry - a timeout is retried like any other 5xx', async () => {
+      const fetchImpl = vi.fn()
+        .mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+        }))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+      const client = new ApiClient(new DevNullLogger(), {
+        baseUrl: 'https://example.com',
+        timeoutMs: 5,
+        retry: { maxAttempts: 2, initialDelayMs: 0 },
+      }, fetchImpl);
+
+      const { response } = await client.request({ path: '/thing' });
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(response).toEqual({ ok: true });
+    });
+  });
 });

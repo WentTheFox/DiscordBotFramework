@@ -95,11 +95,14 @@ const apiClient = new ApiClient(logger, {
   baseUrl: `${env.API_URL}/api`,
   authentication: { type: ApiAuthType.AUTHORIZATION_HEADER, getValue: () => env.API_TOKEN },
   userAgent: env.UA_STRING,
+  retry: { maxAttempts: 3, initialDelayMs: 500 }, // optional; off by default, retries 5xx/429
+  timeoutMs: 5000, // optional; off by default - fetch has no timeout of its own otherwise
 });
 
 const { response } = await apiClient.request({
   path: '/things',
   validator: typia.createValidate<Thing[]>(), // optional; omit for `response: unknown`
+  timeoutMs: 1000, // optional; overrides the client-level default for this call only
 });
 ```
 

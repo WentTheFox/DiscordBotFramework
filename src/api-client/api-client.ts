@@ -71,6 +71,7 @@ export class ApiClient {
     const requestUrlBuilder = new URL(requestUrlRaw);
     requestUrlBuilder.search = this.normalizeQueryParams(queryParams);
     const errorPrefix = `fetch ${method} ${String(requestUrlBuilder)}:`;
+    const timeoutMs = params.timeoutMs ?? this.options.timeoutMs;
 
     try {
       const requestHeaders: Record<string, string> = {
@@ -93,12 +94,16 @@ export class ApiClient {
         method,
         headers: requestHeaders,
         body: requestBody,
+        signal: timeoutMs !== undefined ? AbortSignal.timeout(timeoutMs) : undefined,
       });
       if (r.ok && !raw) {
         responseText = await r.text();
       }
     } catch (e) {
-      const errorMessage = `${errorPrefix} Failed API request`;
+      const isTimeout = e instanceof Error && e.name === 'TimeoutError';
+      const errorMessage = isTimeout
+        ? `${errorPrefix} Request timed out after ${timeoutMs}ms`
+        : `${errorPrefix} Failed API request`;
       this.logger.error(errorMessage, e);
       throw new ApiHttpException(errorMessage, 500, e);
     }

@@ -79,6 +79,16 @@ export interface ApiRequest<T> {
    * @default true
    */
   failOnInvalidResponse?: boolean;
+  /**
+   * Aborts this request after this many milliseconds, overriding
+   * `ApiClientOptions.timeoutMs` for this call only. `fetch` has no timeout of its own - Node's
+   * defaults are minutes-scale, nowhere close to useful for a caller with a real deadline (e.g. a
+   * bot handler inside Discord's 3s interaction-response budget). A timeout surfaces as an
+   * `ApiHttpException` with status 500 like any other network-level failure, so it composes with
+   * `retry` (a hung request that keeps timing out gets retried, same as any other 5xx) without
+   * either needing to know about the other.
+   */
+  timeoutMs?: number;
 }
 
 export interface ApiResponse<T> {
@@ -112,4 +122,10 @@ export interface ApiClientOptions {
   fixedHeaders?: Readonly<Record<string, string>>;
   userAgent?: string;
   retry?: RetryOptions;
+  /**
+   * Default per-request timeout in milliseconds, used when a request doesn't set its own
+   * `ApiRequest.timeoutMs`. See that field's doc for why this exists. Unset (the default) means no
+   * timeout at all, matching this client's behavior before `timeoutMs` existed.
+   */
+  timeoutMs?: number;
 }
