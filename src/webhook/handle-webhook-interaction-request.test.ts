@@ -2,6 +2,7 @@ import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { InteractionResponseType, InteractionType } from 'discord-api-types/v10';
 import { describe, expect, it, vi } from 'vitest';
 import { DevNullLogger } from '../logger/dev-null-logger.js';
+import { LogMethod, NestableLogger } from '../logger/types.js';
 import { handleWebhookInteractionRequest } from './handle-webhook-interaction-request.js';
 
 function generateKeys() {
@@ -15,6 +16,33 @@ function signedRequest(privateKey: ReturnType<typeof generateKeyPairSync>['priva
   const signature = sign(null, Buffer.concat([Buffer.from(timestamp), Buffer.from(rawBody)]), privateKey).toString('hex');
   return { signature, timestamp, rawBody };
 }
+
+/**
+ * A NestableLogger whose `muteMethods` behaves like the real `Logger` (returns a distinct logger
+ * with those methods silenced) rather than `DevNullLogger`'s `muteMethods` (a no-op, since it's
+ * already silent either way) - needed to actually observe whether a given call went through the
+ * muted or unmuted logger.
+ */
+function createTrackingLogger(mutedMethods: LogMethod[] = []): { logger: NestableLogger, calls: { method: LogMethod, args: unknown[] }[] } {
+  const calls: { method: LogMethod, args: unknown[] }[] = [];
+  const muted = new Set(mutedMethods);
+  const make = (mutedSet: Set<LogMethod>): NestableLogger => ({
+    debug: (...args) => { if (!mutedSet.has('debug')) calls.push({ method: 'debug', args }); },
+    info: (...args) => { if (!mutedSet.has('info')) calls.push({ method: 'info', args }); },
+    log: (...args) => { if (!mutedSet.has('log')) calls.push({ method: 'log', args }); },
+    warn: (...args) => { if (!mutedSet.has('warn')) calls.push({ method: 'warn', args }); },
+    error: (...args) => { if (!mutedSet.has('error')) calls.push({ method: 'error', args }); },
+    nest: () => make(mutedSet),
+    muteMethods: (methods) => make(new Set([...mutedSet, ...methods])),
+  });
+  return { logger: make(muted), calls };
+}
+
+const CONFORMANCE_CHECK_BODY = JSON.stringify({
+  type: 1,
+  application_id: 'my-app-id',
+  user: { id: '643945264868098049', system: true, bot: true, username: 'discord' },
+});
 
 describe('handleWebhookInteractionRequest', () => {
   it('rejects a request with an invalid signature without calling onInteraction', async () => {
@@ -183,5 +211,56 @@ describe('handleWebhookInteractionRequest', () => {
     const result = await handleWebhookInteractionRequest(request, { publicKey: rawPublicKeyHex, logger: new DevNullLogger(), onInteraction });
 
     expect(result.status).toBe(500);
+  });
+
+  describe('muteKnownConformanceCheckLogs', () => {
+    it('mutes warn/debug for the known Discord signature-conformance-check payload by default', async () => {
+      const { rawPublicKeyHex } = generateKeys();
+      const { logger, calls } = createTrackingLogger();
+
+      const result = await handleWebhookInteractionRequest(
+        { signature: 'not-valid', timestamp: '1700000000', rawBody: CONFORMANCE_CHECK_BODY },
+        { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn(), applicationId: 'my-app-id' },
+      );
+
+      expect(result.status).toBe(401);
+      expect(calls).toEqual([]);
+    });
+
+    it('still logs an ordinary signature rejection normally', async () => {
+      const { rawPublicKeyHex } = generateKeys();
+      const { logger, calls } = createTrackingLogger();
+
+      await handleWebhookInteractionRequest(
+        { signature: 'not-valid', timestamp: '1700000000', rawBody: '{"type":1}' },
+        { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn(), applicationId: 'my-app-id' },
+      );
+
+      expect(calls.map((c) => c.method)).toEqual(['warn', 'debug']);
+    });
+
+    it('does not mute the known payload when applicationId does not match', async () => {
+      const { rawPublicKeyHex } = generateKeys();
+      const { logger, calls } = createTrackingLogger();
+
+      await handleWebhookInteractionRequest(
+        { signature: 'not-valid', timestamp: '1700000000', rawBody: CONFORMANCE_CHECK_BODY },
+        { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn(), applicationId: 'a-different-app-id' },
+      );
+
+      expect(calls.map((c) => c.method)).toEqual(['warn', 'debug']);
+    });
+
+    it('logs the known payload normally when muteKnownConformanceCheckLogs is disabled', async () => {
+      const { rawPublicKeyHex } = generateKeys();
+      const { logger, calls } = createTrackingLogger();
+
+      await handleWebhookInteractionRequest(
+        { signature: 'not-valid', timestamp: '1700000000', rawBody: CONFORMANCE_CHECK_BODY },
+        { publicKey: rawPublicKeyHex, logger, onInteraction: vi.fn(), applicationId: 'my-app-id', muteKnownConformanceCheckLogs: false },
+      );
+
+      expect(calls.map((c) => c.method)).toEqual(['warn', 'debug']);
+    });
   });
 });

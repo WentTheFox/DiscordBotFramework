@@ -563,6 +563,24 @@ Off by default, and deliberately stops at those fields - it never logs the
 parsed interaction body itself (command names, option values, user data), so
 it's safe to leave on for an investigation without a separate opt-out plan.
 
+One recurring rejection is expected and muted automatically: Discord itself
+periodically sends a `Ping` deliberately signed with an invalid signature
+(seemingly to verify endpoints actually reject bad signatures, rather than
+trusting anything that looks like a Discord request) -
+`isDiscordSignatureConformanceCheck` recognizes it by shape (its `type` and
+Discord's own official system user, not a fixed size) and
+`handleWebhookInteractionRequest` mutes just its `warn`/`debug` logs for that
+one request; the rejection itself is unchanged either way. On by default -
+pass `muteKnownConformanceCheckLogs: false` to always log every rejection, or
+`applicationId: env.DISCORD_CLIENT_ID` to narrow the match further:
+
+```ts
+await handleWebhookInteractionRequest(
+  { signature, timestamp, rawBody, headers },
+  { publicKey: env.DISCORD_PUBLIC_KEY, logger, onInteraction, applicationId: env.DISCORD_CLIENT_ID },
+);
+```
+
 `createWebhookInteractionResponder` gives you the REST calls needed *after*
 that initial response — editing a deferred reply, sending a follow-up, or
 deleting the reply — built on `@discordjs/rest` (already a peer dependency):

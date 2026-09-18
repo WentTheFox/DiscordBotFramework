@@ -4,6 +4,7 @@
 // `handleWebhookInteractionRequest`/`interactionFromWebhookPayload` are
 // unverified against live Discord traffic.
 export * from './verify-interaction-request.js';
+export * from './is-discord-signature-conformance-check.js';
 export * from './handle-webhook-interaction-request.js';
 export * from './create-webhook-interaction-responder.js';
 export * from './create-webhook-only-client.js';

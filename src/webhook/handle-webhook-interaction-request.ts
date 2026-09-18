@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { APIInteraction, APIInteractionResponse, InteractionResponseType, InteractionType } from 'discord-api-types/v10';
 import { NestableLogger } from '../logger/types.js';
 import { verifyInteractionRequest } from './verify-interaction-request.js';
+import { isDiscordSignatureConformanceCheck } from './is-discord-signature-conformance-check.js';
 
 export interface WebhookInteractionRequest {
   /** The request's `X-Signature-Ed25519` header. */
@@ -58,6 +59,22 @@ export interface HandleWebhookInteractionRequestOptions {
    * option values, etc.).
    */
   verboseSignatureDiagnostics?: boolean;
+  /**
+   * This application's Discord application/client ID. Only used to narrow
+   * `muteKnownConformanceCheckLogs` below - optional, but recommended when set.
+   */
+  applicationId?: string;
+  /**
+   * Mutes the `warn`/`debug` signature-rejection logs for Discord's own known
+   * signature-conformance check (see `isDiscordSignatureConformanceCheck`) - a
+   * recurring, benign `Ping` sent with a deliberately-invalid signature,
+   * observed in production to otherwise show up as ordinary-looking
+   * signature-rejection noise roughly hourly. On by default, since it's
+   * expected and doesn't indicate a problem; the request is still rejected
+   * the same either way - this only affects whether that one case logs.
+   * @default true
+   */
+  muteKnownConformanceCheckLogs?: boolean;
 }
 
 /**
@@ -126,7 +143,14 @@ export async function handleWebhookInteractionRequest(
   request: WebhookInteractionRequest,
   options: HandleWebhookInteractionRequestOptions,
 ): Promise<WebhookInteractionResponse> {
-  const { publicKey, logger, onInteraction, verboseSignatureDiagnostics: verbose = false } = options;
+  const {
+    publicKey,
+    logger,
+    onInteraction,
+    verboseSignatureDiagnostics: verbose = false,
+    applicationId,
+    muteKnownConformanceCheckLogs = true,
+  } = options;
 
   const isValid = verifyInteractionRequest({
     publicKey,
@@ -135,8 +159,11 @@ export async function handleWebhookInteractionRequest(
     rawBody: request.rawBody,
   });
   if (!isValid) {
-    logger.warn('Rejected webhook interaction request with invalid signature');
-    logger.debug('Webhook interaction signature-rejection diagnostics', {
+    const rejectionLogger = muteKnownConformanceCheckLogs && isDiscordSignatureConformanceCheck(request.rawBody, applicationId)
+      ? logger.muteMethods(['warn', 'debug'])
+      : logger;
+    rejectionLogger.warn('Rejected webhook interaction request with invalid signature');
+    rejectionLogger.debug('Webhook interaction signature-rejection diagnostics', {
       sourceIp: resolveSourceIp(request.headers),
       userAgent: request.headers?.['user-agent'],
       hasSignatureHeader: request.signature !== undefined,
