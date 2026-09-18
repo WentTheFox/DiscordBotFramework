@@ -1,3 +1,10 @@
+## [2.9.1](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.9.0...v2.9.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **dev:** widen the coalesced-writes test's debounce margin ([2bdc882](https://github.com/WentTheFox/DiscordBotFramework/commit/2bdc882292efc8cea7178aa2344cb892333387e0))
+
 # [2.9.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.8.0...v2.9.0) (2026-09-18)
 
 
