@@ -1,3 +1,11 @@
+## [2.10.1](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.0...v2.10.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* **interactions:** don't reply to or error-log expired interactions ([a666a1f](https://github.com/WentTheFox/DiscordBotFramework/commit/a666a1f7b12bfb41545b915d5c9920b5a6317d27))
+* **logger:** keep batched webhook embeds under Discord's 6000-character total ([d25d199](https://github.com/WentTheFox/DiscordBotFramework/commit/d25d19960e8de7463515da2caa7102bbcda3be67))
+
 # [2.10.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.9.1...v2.10.0) (2026-09-18)
 
 
