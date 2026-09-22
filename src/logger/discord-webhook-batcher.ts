@@ -24,6 +24,9 @@ const DEFAULT_BATCH_INTERVAL_MS = 20_000;
 const DEFAULT_MAX_BATCH_SIZE = 10;
 const DEFAULT_MAX_QUEUE_LENGTH = 500;
 const EMBED_DESCRIPTION_LIMIT = 4096;
+// Discord rejects (HTTP 400) a message whose embeds' combined text exceeds this, even when every
+// individual embed is within its own limits - a few long stack traces in one batch is enough.
+const EMBEDS_TOTAL_TEXT_LIMIT = 6000;
 
 // Discord embed side-bar colors, keyed by pino's numeric levels (trace=10 ... fatal=60).
 const LEVEL_COLORS: Record<number, number> = {
@@ -73,11 +76,21 @@ export class DiscordWebhookBatcher {
   async flush(): Promise<void> {
     if (this.queue.length === 0) return;
     const maxBatchSize = this.options.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;
-    const batch = this.queue.splice(0, maxBatchSize);
+    const embeds: ReturnType<typeof buildEmbed>[] = [];
+    let totalTextLength = 0;
+    while (embeds.length < maxBatchSize && this.queue.length > 0) {
+      const embed = buildEmbed(this.queue[0]);
+      // The first embed always fits on its own (EMBED_DESCRIPTION_LIMIT < EMBEDS_TOTAL_TEXT_LIMIT),
+      // anything past the combined limit is carried over to the next tick.
+      if (embeds.length > 0 && totalTextLength + embed.description.length > EMBEDS_TOTAL_TEXT_LIMIT) break;
+      this.queue.shift();
+      embeds.push(embed);
+      totalTextLength += embed.description.length;
+    }
     const payload = {
       username: this.options.username,
       avatar_url: this.options.avatarUrl,
-      embeds: batch.map(buildEmbed),
+      embeds,
     };
 
     try {

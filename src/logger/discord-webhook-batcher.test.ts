@@ -70,6 +70,23 @@ describe('DiscordWebhookBatcher', () => {
     expect(body.embeds[0].description).toBe('[Bot] three');
   });
 
+  it('carries embeds past the combined 6000-character limit over to the next tick', async () => {
+    batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+    batcher.write(record({ prefixLabel: '', msg: 'a'.repeat(2500) }));
+    batcher.write(record({ prefixLabel: '', msg: 'b'.repeat(2500) }));
+    batcher.write(record({ prefixLabel: '', msg: 'c'.repeat(2500) }));
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    let body = JSON.parse((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.embeds.map((e: { description: string }) => e.description[0])).toEqual(['a', 'b']);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    body = JSON.parse((fetchImpl.mock.calls[1] as [string, RequestInit])[1].body as string);
+    expect(body.embeds.map((e: { description: string }) => e.description[0])).toEqual(['c']);
+  });
+
   it('truncates descriptions past the embed limit', async () => {
     batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
     batcher.write(record({ prefixLabel: '', msg: 'x'.repeat(5000) }));
