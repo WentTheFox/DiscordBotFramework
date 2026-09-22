@@ -1,6 +1,9 @@
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import {
   AutocompleteInteraction,
+  BaseInteraction,
   ChatInputCommandInteraction,
+  DiscordAPIError,
   MessageComponentInteraction,
   ModalSubmitInteraction,
   UserContextMenuCommandInteraction,
@@ -16,6 +19,31 @@ import {
 } from './types.js';
 
 export type OnDispatchError<Ctx> = (interaction: unknown, context: Ctx, error: unknown) => void | Promise<void>;
+
+/**
+ * Discord invalidates an interaction's token if it isn't acknowledged within 3 seconds of being
+ * sent (or when a newer autocomplete interaction supersedes it), after which every response to it
+ * fails with this error - including the error reply `onError` would otherwise attempt.
+ */
+export const isUnknownInteractionError = (e: unknown): boolean =>
+  e instanceof DiscordAPIError && e.code === RESTJSONErrorCodes.UnknownInteraction;
+
+async function handleDispatchError<Ctx extends BaseInteractionContext>(
+  interaction: BaseInteraction,
+  context: Ctx,
+  onError: OnDispatchError<Ctx>,
+  error: unknown,
+  description: string,
+): Promise<void> {
+  if (isUnknownInteractionError(error)) {
+    // Nothing can be sent for an expired interaction, so there's no point in a stack trace or an
+    // error reply - the age is what tells a slow handler apart from a late delivery by Discord.
+    context.logger.warn(`Interaction expired before it could be responded to: ${description}, age=${Date.now() - interaction.createdTimestamp}ms`);
+    return;
+  }
+  context.logger.error(`Error while responding to ${description}`, error);
+  await onError(interaction, context, error);
+}
 
 export interface DispatchChatInputCommandOptions<Ctx extends BaseInteractionContext> {
   commands: Record<string, BotChatInputCommand<Ctx>>;
@@ -40,8 +68,7 @@ export async function dispatchChatInputCommand<Ctx extends BaseInteractionContex
   try {
     await command.handle(interaction, context);
   } catch (e) {
-    context.logger.error(`Error while responding to command interaction (commandName=${interaction.commandName})`, e);
-    await options.onError(interaction, context, e);
+    await handleDispatchError(interaction, context, options.onError, e, `command interaction (commandName=${interaction.commandName})`);
   }
 }
 
@@ -64,8 +91,7 @@ export async function dispatchAutocomplete<Ctx extends BaseInteractionContext>(
     }
     await handler(interaction, context, focusedOption.name);
   } catch (e) {
-    context.logger.error(`Error while responding to command autocomplete (commandName=${interaction.commandName})`, e);
-    await options.onError(interaction, context, e);
+    await handleDispatchError(interaction, context, options.onError, e, `command autocomplete (commandName=${interaction.commandName})`);
   }
 }
 
@@ -94,8 +120,7 @@ export async function dispatchComponent<Ctx extends BaseInteractionContext>(
   try {
     await component.handle(interaction, context, resourceId);
   } catch (e) {
-    context.logger.error(`Error while responding to component interaction (customId=${id},resourceId=${resourceId})`, e);
-    await options.onError(interaction, context, e);
+    await handleDispatchError(interaction, context, options.onError, e, `component interaction (customId=${id},resourceId=${resourceId})`);
   }
 }
 
@@ -124,8 +149,7 @@ export async function dispatchModal<Ctx extends BaseInteractionContext>(
   try {
     await modal.handle(interaction, context, resourceId);
   } catch (e) {
-    context.logger.error(`Error while responding to modal submit interaction (customId=${id},resourceId=${resourceId})`, e);
-    await options.onError(interaction, context, e);
+    await handleDispatchError(interaction, context, options.onError, e, `modal submit interaction (customId=${id},resourceId=${resourceId})`);
   }
 }
 
@@ -152,7 +176,6 @@ export async function dispatchContextMenu<Ctx extends BaseInteractionContext>(
   try {
     await command.handle(interaction, context);
   } catch (e) {
-    context.logger.error(`Error while responding to context menu interaction (commandName=${interaction.commandName})`, e);
-    await options.onError(interaction, context, e);
+    await handleDispatchError(interaction, context, options.onError, e, `context menu interaction (commandName=${interaction.commandName})`);
   }
 }
