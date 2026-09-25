@@ -1,4 +1,11 @@
-import { APIInteraction, ApplicationCommandType, ComponentType, InteractionType } from 'discord-api-types/v10';
+import {
+  APIInteraction,
+  APIMessageApplicationCommandInteraction,
+  APIPoll,
+  ApplicationCommandType,
+  ComponentType,
+  InteractionType,
+} from 'discord-api-types/v10';
 import {
   AutocompleteInteraction,
   ButtonInteraction,
@@ -39,6 +46,35 @@ function constructInteraction<T>(InteractionClass: unknown, client: Client<true>
 }
 
 /**
+ * discord.js's `Poll` constructor reads its channel ID from the poll payload's
+ * own `channel_id` (only present on gateway poll payloads), falling back to
+ * `channel.id` - and a message context menu's resolved target message is
+ * built with `this.channel`, which is always `null` here (see below), so
+ * targeting any message with a poll would throw
+ * `Cannot read properties of null (reading 'id')` before a handler ever runs.
+ * Copies each resolved message's own `channel_id` onto its poll, without
+ * mutating the caller's payload.
+ */
+function withResolvedPollChannelIds(data: APIMessageApplicationCommandInteraction): APIMessageApplicationCommandInteraction {
+  const messages = data.data.resolved?.messages;
+  if (!messages || !Object.values(messages).some((message) => message.poll)) return data;
+
+  return {
+    ...data,
+    data: {
+      ...data.data,
+      resolved: {
+        ...data.data.resolved,
+        messages: Object.fromEntries(Object.entries(messages).map(([id, message]) => [
+          id,
+          message.poll ? { ...message, poll: { ...message.poll, channel_id: message.channel_id } as APIPoll } : message,
+        ])),
+      },
+    },
+  };
+}
+
+/**
  * Reconstructs a genuine discord.js `Interaction` instance from a raw
  * webhook-delivered interaction payload, so existing gateway-shaped handler
  * code (`interaction.reply()`, `interaction.options.getString()`, etc.) can
@@ -74,7 +110,7 @@ export function interactionFromWebhookPayload(client: Client<true>, data: APIInt
         case ApplicationCommandType.User:
           return constructInteraction(UserContextMenuCommandInteraction, client, data);
         case ApplicationCommandType.Message:
-          return constructInteraction(MessageContextMenuCommandInteraction, client, data);
+          return constructInteraction(MessageContextMenuCommandInteraction, client, withResolvedPollChannelIds(data as APIMessageApplicationCommandInteraction));
         case ApplicationCommandType.PrimaryEntryPoint:
           return constructInteraction(PrimaryEntryPointCommandInteraction, client, data);
         default:

@@ -1,5 +1,6 @@
 import {
   APIChatInputApplicationCommandInteraction,
+  APIMessageApplicationCommandInteraction,
   APIMessageComponentButtonInteraction,
   APIModalSubmitInteraction,
   ApplicationCommandOptionType,
@@ -33,6 +34,47 @@ function chatInputPayload(): APIChatInputApplicationCommandInteraction {
     channel_id: 'channel-1',
     user: { id: 'user-1', username: 'tester', discriminator: '0', global_name: null, avatar: null },
   } as APIChatInputApplicationCommandInteraction;
+}
+
+function messageContextMenuWithPollPayload(): APIMessageApplicationCommandInteraction {
+  return {
+    ...chatInputPayload(),
+    id: '4',
+    data: {
+      id: 'cmd-2',
+      name: 'Find timestamps',
+      type: ApplicationCommandType.Message,
+      target_id: '223456789012345678',
+      resolved: {
+        messages: {
+          '223456789012345678': {
+            id: '223456789012345678',
+            channel_id: 'channel-1',
+            type: 0,
+            content: '',
+            author: { id: '323456789012345678', username: 'poller', discriminator: '0', global_name: null, avatar: null },
+            timestamp: '2026-09-25T06:35:00.000Z',
+            edited_timestamp: null,
+            tts: false,
+            mention_everyone: false,
+            mentions: [],
+            mention_roles: [],
+            attachments: [],
+            embeds: [],
+            pinned: false,
+            // Unlike the gateway's poll payloads, a resolved message's poll carries no channel_id
+            poll: {
+              question: { text: 'When?' },
+              answers: [{ answer_id: 1, poll_media: { text: 'Now' } }],
+              expiry: '2026-09-26T06:35:00.000Z',
+              allow_multiselect: false,
+              layout_type: 1,
+            },
+          },
+        },
+      },
+    },
+  } as unknown as APIMessageApplicationCommandInteraction;
 }
 
 function buttonPayload(): APIMessageComponentButtonInteraction {
@@ -120,6 +162,19 @@ describe('interactionFromWebhookPayload', () => {
     expect(interaction.isModalSubmit()).toBe(true);
     if (!interaction.isModalSubmit()) throw new Error('unreachable');
     expect(interaction.customId).toBe('feedback');
+  });
+
+  it('constructs a MessageContextMenuCommandInteraction targeting a message with a poll', () => {
+    const client = createWebhookOnlyClient({ token: 'test-token' });
+    const payload = messageContextMenuWithPollPayload();
+    const interaction = interactionFromWebhookPayload(client, payload);
+
+    expect(interaction.isMessageContextMenuCommand()).toBe(true);
+    if (!interaction.isMessageContextMenuCommand()) throw new Error('unreachable');
+    expect(interaction.targetMessage.poll?.channelId).toBe('channel-1');
+    expect(interaction.targetMessage.poll?.question.text).toBe('When?');
+    // The caller's payload is left untouched
+    expect(payload.data.resolved.messages['223456789012345678'].poll).not.toHaveProperty('channel_id');
   });
 
   it('throws a clear error for an interaction type it does not recognize', () => {
