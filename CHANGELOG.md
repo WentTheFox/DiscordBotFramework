@@ -1,3 +1,10 @@
+## [2.10.2](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.1...v2.10.2) (2026-09-25)
+
+
+### Bug Fixes
+
+* **webhook:** don't crash on message context menus targeting a poll ([6e206d1](https://github.com/WentTheFox/DiscordBotFramework/commit/6e206d1414c2886d7049e62c34549792a6d4dd54))
+
 ## [2.10.1](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.0...v2.10.1) (2026-09-22)
 
 
