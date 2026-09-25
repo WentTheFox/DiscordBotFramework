@@ -1,3 +1,10 @@
+## [2.10.3](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.2...v2.10.3) (2026-09-25)
+
+
+### Bug Fixes
+
+* **commands:** rethrow registrar failures instead of exiting the process ([75bd62b](https://github.com/WentTheFox/DiscordBotFramework/commit/75bd62b126e772fd14ee730472cbb303a77b39a7))
+
 ## [2.10.2](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.1...v2.10.2) (2026-09-25)
 
 
