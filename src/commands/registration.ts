@@ -17,17 +17,24 @@ export interface CommandRegistrarOptions {
 
 export interface CommandRegistrar {
   getAuthorizedServers(): Promise<string[]>;
-  updateGuildCommands(guildId: Snowflake, body: RESTPostAPIApplicationCommandsJSONBody[]): Promise<RESTPutAPIApplicationGuildCommandsResult | undefined>;
+  updateGuildCommands(guildId: Snowflake, body: RESTPostAPIApplicationCommandsJSONBody[]): Promise<RESTPutAPIApplicationGuildCommandsResult>;
   cleanGuildCommands(guildId: Snowflake): Promise<void>;
-  updateGlobalCommands(body: RESTPostAPIApplicationCommandsJSONBody[]): Promise<RESTPutAPIApplicationCommandsResult | undefined>;
+  updateGlobalCommands(body: RESTPostAPIApplicationCommandsJSONBody[]): Promise<RESTPutAPIApplicationCommandsResult>;
   cleanGlobalCommands(): Promise<void>;
 }
 
 /**
  * Wraps `@discordjs/rest` slash-command (re)registration/cleanup for both
- * global and per-guild scopes. Exits the process on failure, matching the
- * behavior every bot already relies on (a failed startup command sync should
- * not silently continue running with stale commands).
+ * global and per-guild scopes. Failures are logged and then rethrown, leaving
+ * it to the caller whether that's fatal - these also run inside long-lived
+ * processes (e.g. an owner-only "update commands" interaction), where exiting
+ * would take the whole bot down, and a startup sync script may still have
+ * other independent steps worth finishing. An uncaught rejection still ends a
+ * plain CLI script with a non-zero exit code, same as before.
+ *
+ * Timeouts and retries are whatever the passed-in `rest` is configured with -
+ * a bulk overwrite can take Discord well past `@discordjs/rest`'s 15s default,
+ * so bots may want a dedicated `REST` instance for this.
  */
 export function createCommandRegistrar({ rest, applicationId, logger: baseLogger }: CommandRegistrarOptions): CommandRegistrar {
   return {
@@ -51,7 +58,7 @@ export function createCommandRegistrar({ rest, applicationId, logger: baseLogger
         return result;
       } catch (error) {
         logger.error('Failed to reload guild commands', error);
-        process.exit(1);
+        throw error;
       }
     },
 
@@ -63,7 +70,7 @@ export function createCommandRegistrar({ rest, applicationId, logger: baseLogger
         logger.log('Successfully cleaned guild commands');
       } catch (error) {
         logger.error('Failed to clean guild commands', error);
-        process.exit(1);
+        throw error;
       }
     },
 
@@ -79,7 +86,7 @@ export function createCommandRegistrar({ rest, applicationId, logger: baseLogger
         return result;
       } catch (error) {
         logger.error('Failed to reload application commands', error);
-        process.exit(1);
+        throw error;
       }
     },
 
@@ -91,7 +98,7 @@ export function createCommandRegistrar({ rest, applicationId, logger: baseLogger
         logger.log('Successfully cleaned application commands');
       } catch (error) {
         logger.error('Failed to clean application commands', error);
-        process.exit(1);
+        throw error;
       }
     },
   };
