@@ -4,6 +4,7 @@ import {
   BaseInteraction,
   ChatInputCommandInteraction,
   DiscordAPIError,
+  HTTPError,
   MessageComponentInteraction,
   ModalSubmitInteraction,
   UserContextMenuCommandInteraction,
@@ -28,6 +29,16 @@ export type OnDispatchError<Ctx> = (interaction: unknown, context: Ctx, error: u
 export const isUnknownInteractionError = (e: unknown): boolean =>
   e instanceof DiscordAPIError && e.code === RESTJSONErrorCodes.UnknownInteraction;
 
+/**
+ * A 5xx from Discord on the interaction callback route, i.e. the initial response to an interaction
+ * (after @discordjs/rest's own retries). The error reply `onError` would send goes to that same
+ * route, so it would only fail the same way and log the same outage two more times.
+ */
+export const isInteractionCallbackServerError = (e: unknown): e is DiscordAPIError | HTTPError =>
+  (e instanceof DiscordAPIError || e instanceof HTTPError)
+  && e.status >= 500 && e.status < 600
+  && /\/interactions\/\d+\/[^/]+\/callback(\?|$)/.test(e.url);
+
 async function handleDispatchError<Ctx extends BaseInteractionContext>(
   interaction: BaseInteraction,
   context: Ctx,
@@ -39,6 +50,11 @@ async function handleDispatchError<Ctx extends BaseInteractionContext>(
     // Nothing can be sent for an expired interaction, so there's no point in a stack trace or an
     // error reply - the age is what tells a slow handler apart from a late delivery by Discord.
     context.logger.warn(`Interaction expired before it could be responded to: ${description}, age=${Date.now() - interaction.createdTimestamp}ms`);
+    return;
+  }
+  if (isInteractionCallbackServerError(error)) {
+    // An outage on Discord's end - nothing to debug here, and nothing can be sent to the user.
+    context.logger.warn(`Discord returned ${error.status} to the interaction response for ${description}, skipping the error reply`);
     return;
   }
   context.logger.error(`Error while responding to ${description}`, error);

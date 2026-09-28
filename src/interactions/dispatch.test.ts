@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AutocompleteInteraction, ChatInputCommandInteraction, DiscordAPIError, MessageComponentInteraction } from 'discord.js';
+import { AutocompleteInteraction, ChatInputCommandInteraction, DiscordAPIError, HTTPError, MessageComponentInteraction } from 'discord.js';
 import { DevNullLogger } from '../logger/dev-null-logger.js';
-import { dispatchAutocomplete, dispatchChatInputCommand, dispatchComponent, isUnknownInteractionError } from './dispatch.js';
+import {
+  dispatchAutocomplete,
+  dispatchChatInputCommand,
+  dispatchComponent,
+  isInteractionCallbackServerError,
+  isUnknownInteractionError,
+} from './dispatch.js';
 import { BotChatInputCommand, BotMessageComponent } from './types.js';
 
 const context = { logger: new DevNullLogger() };
@@ -14,6 +20,9 @@ const unknownInteractionError = () => new DiscordAPIError(
   'https://discord.com/api/v10/interactions/1/token/callback',
   { files: undefined, body: undefined },
 );
+
+const httpError = (status: number, url = 'https://discord.com/api/v10/interactions/1/token/callback?with_response=false') =>
+  new HTTPError(status, 'Service Unavailable', 'POST', url, { files: undefined, body: undefined });
 
 describe('dispatchChatInputCommand', () => {
   it('invokes the matching command handler', async () => {
@@ -66,6 +75,28 @@ describe('dispatchChatInputCommand', () => {
     error.mockRestore();
   });
 
+  it('logs a 5xx on the interaction callback as a single warning instead of calling onError', async () => {
+    const onError = vi.fn();
+    const warn = vi.spyOn(context.logger, 'warn');
+    const error = vi.spyOn(context.logger, 'error');
+    const commands: Record<string, BotChatInputCommand<typeof context>> = {
+      outage: {
+        handle: () => {
+          throw httpError(503);
+        },
+      },
+    };
+    const interaction = { commandName: 'outage' } as unknown as ChatInputCommandInteraction;
+
+    await dispatchChatInputCommand(interaction, context, { commands, onError });
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith('Discord returned 503 to the interaction response for command interaction (commandName=outage), skipping the error reply');
+    warn.mockRestore();
+    error.mockRestore();
+  });
+
   it('throws for an unknown command when no onUnknownCommand is given', async () => {
     const interaction = { commandName: 'missing' } as unknown as ChatInputCommandInteraction;
     await expect(dispatchChatInputCommand(interaction, context, { commands: {}, onError: vi.fn() }))
@@ -114,5 +145,24 @@ describe('isUnknownInteractionError', () => {
   it('only matches Discord API error 10062', () => {
     expect(isUnknownInteractionError(unknownInteractionError())).toBe(true);
     expect(isUnknownInteractionError(new Error('Unknown interaction'))).toBe(false);
+  });
+});
+
+describe('isInteractionCallbackServerError', () => {
+  it('only matches 5xx errors on the interaction callback route', () => {
+    expect(isInteractionCallbackServerError(httpError(503))).toBe(true);
+    expect(isInteractionCallbackServerError(httpError(500, 'https://discord.com/api/v10/interactions/1/token/callback'))).toBe(true);
+    expect(isInteractionCallbackServerError(new DiscordAPIError(
+      { message: 'Internal Server Error', code: 0 },
+      0,
+      502,
+      'POST',
+      'https://discord.com/api/v10/interactions/1/token/callback',
+      { files: undefined, body: undefined },
+    ))).toBe(true);
+    expect(isInteractionCallbackServerError(httpError(429))).toBe(false);
+    expect(isInteractionCallbackServerError(httpError(503, 'https://discord.com/api/v10/webhooks/1/token/messages/@original'))).toBe(false);
+    expect(isInteractionCallbackServerError(unknownInteractionError())).toBe(false);
+    expect(isInteractionCallbackServerError(new Error('Service Unavailable'))).toBe(false);
   });
 });
