@@ -1,3 +1,10 @@
+## [2.10.4](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.3...v2.10.4) (2026-09-28)
+
+
+### Bug Fixes
+
+* **interactions:** warn once on a Discord 5xx to the interaction callback ([49601c6](https://github.com/WentTheFox/DiscordBotFramework/commit/49601c661ff399c8ced5aea0ca0a90de9a0b697f))
+
 ## [2.10.3](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.2...v2.10.3) (2026-09-25)
 
 
