@@ -1,3 +1,10 @@
+## [2.10.5](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.4...v2.10.5) (2026-09-29)
+
+
+### Bug Fixes
+
+* **webhook:** don't retry the initial interaction response ([5f7ca47](https://github.com/WentTheFox/DiscordBotFramework/commit/5f7ca47e8abb279739b0c027d616783cbd7b4086))
+
 ## [2.10.4](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.3...v2.10.4) (2026-09-28)
 
 
