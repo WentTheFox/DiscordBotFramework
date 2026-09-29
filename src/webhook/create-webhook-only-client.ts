@@ -1,4 +1,8 @@
-import { Client, ClientOptions } from 'discord.js';
+import { Client, ClientOptions, REST } from 'discord.js';
+
+const INTERACTION_CALLBACK_ROUTE = /^\/interactions\/\d+\/[^/]+\/callback$/;
+
+export const isInteractionCallbackRoute = (fullRoute: string): boolean => INTERACTION_CALLBACK_ROUTE.test(fullRoute);
 
 export interface CreateWebhookOnlyClientOptions extends Omit<ClientOptions, 'intents'> {
   /** No gateway connection is ever opened, so no intents actually apply - defaults to `[]`. */
@@ -32,11 +36,25 @@ export interface CreateWebhookOnlyClientOptions extends Omit<ClientOptions, 'int
  * `Ready` at the type level but genuinely absent at runtime -
  * `client.user`/`client.application` chief among them - will be `null`
  * despite what its type claims; avoid touching those in webhook mode.
+ *
+ * The initial response to an interaction (`Routes.interactionCallback()`) is
+ * sent through a separate `REST` instance with `retries: 0`: Discord only
+ * accepts it within ~3s of the interaction's creation, and each of
+ * `@discordjs/rest`'s retries on a 5xx takes about as long as that on its own,
+ * so during an outage they only ever delay the inevitable failure (by up to
+ * tens of seconds). Everything else - `editReply()`, `followUp()`, which have
+ * 15 minutes - keeps the client's usual retries.
  */
 export function createWebhookOnlyClient(options: CreateWebhookOnlyClientOptions): Client<true> {
   const { token, intents = [], ...clientOptions } = options;
   const client = new Client({ intents, ...clientOptions });
   client.token = token;
   client.rest.setToken(token);
+
+  const callbackRest = new REST({ ...client.options.rest, retries: 0 }).setToken(token);
+  const post = client.rest.post.bind(client.rest);
+  client.rest.post = (fullRoute, options) =>
+    isInteractionCallbackRoute(fullRoute) ? callbackRest.post(fullRoute, options) : post(fullRoute, options);
+
   return client as Client<true>;
 }
