@@ -1,4 +1,4 @@
-import { Client, ClientOptions, REST } from 'discord.js';
+import { Client, ClientOptions, ClientUser, REST } from 'discord.js';
 
 const INTERACTION_CALLBACK_ROUTE = /^\/interactions\/\d+\/[^/]+\/callback$/;
 
@@ -8,6 +8,13 @@ export interface CreateWebhookOnlyClientOptions extends Omit<ClientOptions, 'int
   /** No gateway connection is ever opened, so no intents actually apply - defaults to `[]`. */
   intents?: ClientOptions['intents'];
   token: string;
+  /**
+   * The bot's application ID (same as its user ID). When given, `client.user` is set to a minimal
+   * `ClientUser` carrying just this `id`. Without it `client.user` stays `null`, which makes discord.js
+   * throw while constructing any message carrying one of the bot's own reactions (e.g. the target of a
+   * message context menu command) - pass it unless you never handle such messages.
+   */
+  applicationId?: string;
 }
 
 /**
@@ -35,7 +42,11 @@ export interface CreateWebhookOnlyClientOptions extends Omit<ClientOptions, 'int
  * (there's no gateway connection to become ready on), so anything gated by
  * `Ready` at the type level but genuinely absent at runtime -
  * `client.user`/`client.application` chief among them - will be `null`
- * despite what its type claims; avoid touching those in webhook mode.
+ * despite what its type claims; avoid touching those in webhook mode - except
+ * that `client.user` is given a minimal stand-in (just its `id`) when
+ * `applicationId` is passed, since discord.js itself dereferences it while
+ * building a message with a `me: true` reaction. Nothing else about it
+ * (`tag`, `username`, ...) is populated.
  *
  * The initial response to an interaction (`Routes.interactionCallback()`) is
  * sent through a separate `REST` instance with `retries: 0`: Discord only
@@ -46,10 +57,17 @@ export interface CreateWebhookOnlyClientOptions extends Omit<ClientOptions, 'int
  * 15 minutes - keeps the client's usual retries.
  */
 export function createWebhookOnlyClient(options: CreateWebhookOnlyClientOptions): Client<true> {
-  const { token, intents = [], ...clientOptions } = options;
+  const { token, applicationId, intents = [], ...clientOptions } = options;
   const client = new Client({ intents, ...clientOptions });
   client.token = token;
   client.rest.setToken(token);
+
+  if (applicationId) {
+    // `ClientUser`'s constructor is `protected` in discord.js's typings only (same cast as
+    // `interactionFromWebhookPayload`'s)
+    const ClientUserCtor = ClientUser as unknown as new (client: Client, data: { id: string }) => ClientUser;
+    client.user = new ClientUserCtor(client, { id: applicationId });
+  }
 
   const callbackRest = new REST({ ...client.options.rest, retries: 0 }).setToken(token);
   const post = client.rest.post.bind(client.rest);

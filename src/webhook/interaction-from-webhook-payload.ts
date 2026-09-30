@@ -96,6 +96,12 @@ function withResolvedPollChannelIds(data: APIMessageApplicationCommandInteractio
  *   function does not attempt that itself (discord.js's own equivalent step,
  *   `Action#getChannel`, is a private internal not exposed for reuse).
  *
+ * A third, related gap lives on the client rather than the interaction:
+ * `client.user` is `null` without a gateway READY, and discord.js dereferences
+ * it while building a message with a `me: true` reaction (`MessageReaction`),
+ * which a message context menu command's `resolved.messages` can contain.
+ * `createWebhookOnlyClient`'s `applicationId` option sets a minimal stand-in.
+ *
  * `.member` degrades gracefully instead of breaking: it falls back to the
  * raw `APIInteractionGuildMember` POJO instead of a real `GuildMember`
  * class instance when `.guild` is `null`, so plain property reads (`.roles`,

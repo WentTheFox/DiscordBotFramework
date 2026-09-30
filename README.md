@@ -607,7 +607,7 @@ exactly as they do today, and your existing `BotChatInputCommand`/
 import { createWebhookOnlyClient, handleWebhookInteractionRequest, interactionFromWebhookPayload } from '@went.tf/discord-bot-framework/webhook';
 import { dispatchChatInputCommand } from '@went.tf/discord-bot-framework/interactions';
 
-const client = createWebhookOnlyClient({ token: env.DISCORD_BOT_TOKEN });
+const client = createWebhookOnlyClient({ token: env.DISCORD_BOT_TOKEN, applicationId: env.DISCORD_CLIENT_ID });
 
 // inside your HTTP handler, in place of the plain onInteraction above:
 onInteraction: async (data) => {
@@ -625,6 +625,11 @@ populated gateway cache: `.guild` is always `null`, and `.channel` is `null`
 unless you pre-cache the interaction's inline partial channel data yourself.
 `.member` degrades gracefully instead (falls back to the raw
 `APIInteractionGuildMember` object), so plain property reads keep working.
+`client.user` would be `null` too (no gateway READY), which discord.js
+dereferences while building any message carrying one of the bot's own
+reactions - e.g. the target of a message context menu command - so pass
+`applicationId` and it's set to a minimal `ClientUser` (just its `id`; `tag`,
+`username`, ... stay unpopulated).
 See `interactionFromWebhookPayload`'s doc comment for the full detail -
 runtime-verified in `interaction-from-webhook-payload.test.ts` (including the
 two discord.js interaction classes with `private` constructors,

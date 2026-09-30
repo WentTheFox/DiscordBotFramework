@@ -1,4 +1,4 @@
-import { HTTPError, Routes } from 'discord.js';
+import { HTTPError, Message, Routes } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 import { createWebhookOnlyClient, isInteractionCallbackRoute } from './create-webhook-only-client.js';
 
@@ -25,6 +25,35 @@ describe('isInteractionCallbackRoute', () => {
 });
 
 describe('createWebhookOnlyClient', () => {
+  const messageWithOwnReaction = {
+    id: '1',
+    channel_id: '2',
+    content: 'x',
+    author: { id: '3', username: 'a' },
+    attachments: [],
+    embeds: [],
+    mentions: [],
+    mention_roles: [],
+    pinned: false,
+    type: 0,
+    timestamp: new Date().toISOString(),
+    reactions: [{ emoji: { name: '👍', id: null }, count: 1, me: true }],
+  };
+
+  it('leaves client.user null without an applicationId', () => {
+    const client = createWebhookOnlyClient({ token: 'token' });
+
+    expect(client.user).toBeNull();
+    expect(() => new Message(client, messageWithOwnReaction as never)).toThrow(TypeError);
+  });
+
+  it('sets client.user from applicationId so messages with the bot\'s own reaction construct', () => {
+    const client = createWebhookOnlyClient({ token: 'token', applicationId: '123' });
+
+    expect(client.user.id).toBe('123');
+    expect(new Message(client, messageWithOwnReaction as never).reactions.cache.size).toBe(1);
+  });
+
   // HTTPError is discord.js's own copy of @discordjs/rest's, which dispatch's 5xx check relies on
   it('does not retry a failed interaction callback', async () => {
     const { client, requestedUrls } = createClientAnswering503();
