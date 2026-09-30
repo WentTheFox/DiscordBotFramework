@@ -1,3 +1,10 @@
+## [2.10.6](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.5...v2.10.6) (2026-09-30)
+
+
+### Bug Fixes
+
+* **webhook:** let createWebhookOnlyClient set client.user from applicationId ([4e41bb0](https://github.com/WentTheFox/DiscordBotFramework/commit/4e41bb0ead79f599a9d3511aac5c0ab85627279a))
+
 ## [2.10.5](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.4...v2.10.5) (2026-09-29)
 
 
