@@ -1,3 +1,10 @@
+## [2.10.7](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.6...v2.10.7) (2026-10-14)
+
+
+### Bug Fixes
+
+* read deployed commit from .git-deploy-commit and log webhook failure bodies ([d3abb6f](https://github.com/WentTheFox/DiscordBotFramework/commit/d3abb6f8d739ce77d20a0d820057d595d0dcc487))
+
 ## [2.10.6](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.5...v2.10.6) (2026-09-30)
 
 
