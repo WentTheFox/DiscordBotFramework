@@ -135,6 +135,17 @@ describe('DiscordWebhookBatcher', () => {
     errorSpy.mockRestore();
   });
 
+  it('includes the (truncated) response body in the failure log', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetchImpl.mockResolvedValue({ ok: false, status: 400, text: async () => '{"embeds":["Embed size exceeds maximum size of 6000"]}' });
+    batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+    batcher.write(record());
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('exceeds maximum size of 6000'));
+    errorSpy.mockRestore();
+  });
+
   it('close() flushes whatever is still buffered', async () => {
     batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 60_000 });
     batcher.write(record());

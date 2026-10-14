@@ -100,7 +100,9 @@ export class DiscordWebhookBatcher {
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        console.error(`[discord-webhook-transport] Webhook POST failed with status ${response.status}`);
+        // Discord explains a 400 in the body; without it the failure can't be diagnosed.
+        const body = await response.text?.().catch(() => '') ?? '';
+        console.error(`[discord-webhook-transport] Webhook POST failed with status ${response.status}${body ? `: ${truncate(body, 500)}` : ''}`);
       }
     } catch (e) {
       console.error('[discord-webhook-transport] Webhook POST threw', e);
