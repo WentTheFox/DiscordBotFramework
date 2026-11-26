@@ -1,3 +1,10 @@
+# [2.11.0](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.7...v2.11.0) (2026-11-26)
+
+
+### Features
+
+* **logger:** collapse repeated Discord webhook log messages into one embed with a count ([6b6990b](https://github.com/WentTheFox/DiscordBotFramework/commit/6b6990b6b73c0edc51dbb67cfb5d3374e2ae669d))
+
 ## [2.10.7](https://github.com/WentTheFox/DiscordBotFramework/compare/v2.10.6...v2.10.7) (2026-10-14)
 
 
