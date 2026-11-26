@@ -487,7 +487,14 @@ dispatch, no-logger legacy bot), not just HammerTimeBot's.
   (default 20s) rather than POSTing per log call — this gives a hard, by-construction
   cap on request volume safely under Discord's per-webhook rate limits without a
   separate token-bucket, at the cost of up to `batchIntervalMs` of delivery latency
-  (acceptable for a logging sink, not for anything latency-sensitive).
+  (acceptable for a logging sink, not for anything latency-sensitive). The fixed
+  cadence bounds the *rate*, not the *volume*: a burst of identical errors (a DB
+  outage) used to drain at 10 embeds per tick for minutes after the incident was
+  over, so queued records that are the same message (same level, prefix and text,
+  ignoring UUIDs and long hex ids) are merged into one embed with a "×N (last at
+  HH:MM:SS UTC)" marker (`dedupe`, default on, `dedupe: false` restores one embed
+  per record). A merged burst takes one queue slot, so it also cannot push other
+  messages out via `maxQueueLength`.
   `pino`/`pino-pretty`/`pino-abstract-transport` are core `dependencies` (not
   peer, unlike `./db`/`./i18n`'s optional pieces) since `./logger` is always
   re-exported from the package root and `pino-pretty` is needed by default just to

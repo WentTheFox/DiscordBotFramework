@@ -8,6 +8,13 @@ export interface DiscordWebhookBatcherOptions {
   maxBatchSize?: number;
   /** @default 500 */
   maxQueueLength?: number;
+  /**
+   * Collapse queued records that are the same message (same level, prefix and text, ignoring UUIDs and long hex ids) into one
+   * embed carrying an occurrence count, instead of one embed per record. Keeps a burst of identical errors (a database outage,
+   * a failing dependency) from turning into minutes of channel spam while the fixed batch cadence drains the backlog.
+   * @default true
+   */
+  dedupe?: boolean;
   /** Overridable for tests; defaults to the global `fetch`. */
   fetchImpl?: typeof fetch;
 }
@@ -28,6 +35,18 @@ const EMBED_DESCRIPTION_LIMIT = 4096;
 // individual embed is within its own limits - a few long stack traces in one batch is enough.
 const EMBEDS_TOTAL_TEXT_LIMIT = 6000;
 
+// Ids that differ between otherwise identical messages (worker/request UUIDs, long hex tokens), masked when computing the dedupe key.
+const UUID_PATTERN = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+const LONG_HEX_PATTERN = /\b(?=[0-9a-f]*\d)[0-9a-f]{16,}\b/gi; // must contain a digit, so a long run of plain a-f letters is not mistaken for an id
+
+interface QueueEntry {
+  /** The first record seen for this message; its text and time are what the embed shows. */
+  record: PinoLogRecord;
+  count: number;
+  lastTime: number;
+  key: string | undefined;
+}
+
 // Discord embed side-bar colors, keyed by pino's numeric levels (trace=10 ... fatal=60).
 const LEVEL_COLORS: Record<number, number> = {
   10: 0x95a5a6,
@@ -46,7 +65,10 @@ const LEVEL_COLORS: Record<number, number> = {
  * separate token-bucket.
  */
 export class DiscordWebhookBatcher {
-  private queue: PinoLogRecord[] = [];
+  private queue: QueueEntry[] = [];
+
+  /** Queued (not yet flushed) entries by dedupe key; an entry leaves the map when it leaves the queue. */
+  private readonly queuedByKey = new Map<string, QueueEntry>();
 
   private readonly timer: ReturnType<typeof setInterval>;
 
@@ -62,11 +84,23 @@ export class DiscordWebhookBatcher {
   }
 
   write(record: PinoLogRecord): void {
-    this.queue.push(record);
+    const key = this.options.dedupe === false ? undefined : dedupeKey(record);
+    const time = typeof record.time === 'number' ? record.time : Date.now();
+    const existing = key === undefined ? undefined : this.queuedByKey.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.lastTime = time;
+      return;
+    }
+    const entry: QueueEntry = { record, count: 1, lastTime: time, key };
+    this.queue.push(entry);
+    if (key !== undefined) this.queuedByKey.set(key, entry);
     const maxQueueLength = this.options.maxQueueLength ?? DEFAULT_MAX_QUEUE_LENGTH;
     if (this.queue.length > maxQueueLength) {
       const dropped = this.queue.length - maxQueueLength;
-      this.queue.splice(0, dropped);
+      for (const droppedEntry of this.queue.splice(0, dropped)) {
+        if (droppedEntry.key !== undefined) this.queuedByKey.delete(droppedEntry.key);
+      }
       // Reported directly to console, never re-entering the webhook pipeline, to
       // avoid a feedback loop during a log storm.
       console.error(`[discord-webhook-transport] Queue exceeded ${maxQueueLength} entries; dropped ${dropped} oldest log record(s).`);
@@ -83,7 +117,8 @@ export class DiscordWebhookBatcher {
       // The first embed always fits on its own (EMBED_DESCRIPTION_LIMIT < EMBEDS_TOTAL_TEXT_LIMIT),
       // anything past the combined limit is carried over to the next tick.
       if (embeds.length > 0 && totalTextLength + embed.description.length > EMBEDS_TOTAL_TEXT_LIMIT) break;
-      this.queue.shift();
+      const entry = this.queue.shift();
+      if (entry?.key !== undefined) this.queuedByKey.delete(entry.key);
       embeds.push(embed);
       totalTextLength += embed.description.length;
     }
@@ -115,11 +150,20 @@ export class DiscordWebhookBatcher {
   }
 }
 
-function buildEmbed(record: PinoLogRecord) {
+function dedupeKey(record: PinoLogRecord): string {
   const prefixLabel = typeof record.prefixLabel === 'string' ? record.prefixLabel : '';
   const msg = typeof record.msg === 'string' ? record.msg : '';
+  return `${record.level}|${prefixLabel}|${msg.replace(UUID_PATTERN, '<id>').replace(LONG_HEX_PATTERN, '<hex>')}`;
+}
+
+function buildEmbed(entry: QueueEntry) {
+  const { record } = entry;
+  const prefixLabel = typeof record.prefixLabel === 'string' ? record.prefixLabel : '';
+  const msg = typeof record.msg === 'string' ? record.msg : '';
+  // "×N" marker, only when several records were merged; the text is shortened so the marker always fits.
+  const suffix = entry.count > 1 ? `\n×${entry.count} (last at ${new Date(entry.lastTime).toISOString().slice(11, 19)} UTC)` : '';
   return {
-    description: truncate(`${prefixLabel}${msg}`, EMBED_DESCRIPTION_LIMIT),
+    description: truncate(`${prefixLabel}${msg}`, EMBED_DESCRIPTION_LIMIT - suffix.length) + suffix,
     color: LEVEL_COLORS[record.level] ?? LEVEL_COLORS[30],
     timestamp: new Date(record.time ?? Date.now()).toISOString(),
   };

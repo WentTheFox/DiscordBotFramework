@@ -146,6 +146,91 @@ describe('DiscordWebhookBatcher', () => {
     errorSpy.mockRestore();
   });
 
+  describe('dedupe', () => {
+    const embedsOf = (call: number) => JSON.parse((fetchImpl.mock.calls[call] as [string, RequestInit])[1].body as string).embeds as { description: string; timestamp: string }[];
+
+    it('collapses the same message into one embed with a count, ignoring UUIDs', async () => {
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+      const msg = (id: string) => `Connection terminated (Queue: send-it, Worker: ${id})`;
+      batcher.write(record({ msg: msg('1e21e58d-92da-4b05-aeff-f1b044c651c8'), time: Date.parse('2026-07-13T00:00:01.000Z') }));
+      batcher.write(record({ msg: msg('d497da19-a95f-4366-be71-e99e5cae636d'), time: Date.parse('2026-07-13T00:00:02.000Z') }));
+      batcher.write(record({ msg: msg('aaaaaaaa-92da-4b05-aeff-f1b044c651c8'), time: Date.parse('2026-07-13T00:00:09.000Z') }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      const embeds = embedsOf(0);
+      expect(embeds).toHaveLength(1);
+      // the first record's text and time, plus the count and the time of the last one
+      expect(embeds[0].description).toBe('[Bot] Connection terminated (Queue: send-it, Worker: 1e21e58d-92da-4b05-aeff-f1b044c651c8)\n×3 (last at 00:00:09 UTC)');
+      expect(embeds[0].timestamp).toBe('2026-07-13T00:00:01.000Z');
+    });
+
+    it('masks long hex ids but not plain long words', async () => {
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+      batcher.write(record({ msg: 'request 4f9c2a7e81b3d5c0 failed' }));
+      batcher.write(record({ msg: 'request 0a1b2c3d4e5f6071 failed' }));
+      batcher.write(record({ msg: 'deadbeefdeadbeefdead' }));
+      batcher.write(record({ msg: 'facefacefaceface' }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(embedsOf(0).map((e) => e.description.split('\n')[0])).toEqual(['[Bot] request 4f9c2a7e81b3d5c0 failed', '[Bot] deadbeefdeadbeefdead', '[Bot] facefacefaceface']);
+    });
+
+    it('keeps different messages and different levels apart', async () => {
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+      batcher.write(record({ msg: 'one' }));
+      batcher.write(record({ msg: 'two' }));
+      batcher.write(record({ msg: 'one', level: 50 }));
+      batcher.write(record({ msg: 'one' }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(embedsOf(0).map((e) => e.description)).toEqual(['[Bot] one\n×2 (last at 00:00:00 UTC)', '[Bot] two', '[Bot] one']);
+    });
+
+    it('starts a new entry once the earlier one has been sent', async () => {
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+      batcher.write(record({ msg: 'again' }));
+      await vi.advanceTimersByTimeAsync(1000);
+      batcher.write(record({ msg: 'again' }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(embedsOf(1)[0].description).toBe('[Bot] again');
+    });
+
+    it('does not merge anything with dedupe: false', async () => {
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000, dedupe: false });
+      batcher.write(record({ msg: 'same' }));
+      batcher.write(record({ msg: 'same' }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(embedsOf(0)).toHaveLength(2);
+    });
+
+    it('counts a merged burst as one queue slot, so it cannot push other messages out', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000, maxQueueLength: 2 });
+      batcher.write(record({ msg: 'rare' }));
+      for (let i = 0; i < 100; i += 1) batcher.write(record({ msg: 'storm' }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(errorSpy).not.toHaveBeenCalled();
+      expect(embedsOf(0).map((e) => e.description.split('\n')[0])).toEqual(['[Bot] rare', '[Bot] storm']);
+      errorSpy.mockRestore();
+    });
+
+    it('keeps the count marker within the embed description limit', async () => {
+      batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 1000 });
+      batcher.write(record({ prefixLabel: '', msg: 'x'.repeat(5000) }));
+      batcher.write(record({ prefixLabel: '', msg: 'x'.repeat(5000) }));
+      await vi.advanceTimersByTimeAsync(1000);
+
+      const [embed] = embedsOf(0);
+      expect(embed.description).toHaveLength(4096);
+      expect(embed.description.endsWith('×2 (last at 00:00:00 UTC)')).toBe(true);
+    });
+  });
+
   it('close() flushes whatever is still buffered', async () => {
     batcher = new DiscordWebhookBatcher({ url: 'https://discord.test/webhook', fetchImpl, batchIntervalMs: 60_000 });
     batcher.write(record());

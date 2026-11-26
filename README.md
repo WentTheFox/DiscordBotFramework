@@ -51,7 +51,8 @@ const shardLogger = Logger.fromShardInfo(process.env.SHARDS);
 ```
 
 To additionally fan logs out to a Discord webhook (in batches, respecting
-Discord's per-webhook rate limits), use `createLogger` instead — it builds one
+Discord's per-webhook rate limits, with repeated identical messages collapsed
+into one embed carrying a "×N" count), use `createLogger` instead — it builds one
 pino instance with the requested transport targets (console + optional
 webhook), and `nest()` on the result shares that same instance rather than
 spawning a new worker thread per call:
